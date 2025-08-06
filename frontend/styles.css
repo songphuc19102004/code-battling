@@ -1,0 +1,126 @@
+body {
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+        sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f4f4f9;
+    color: #333;
+    display: flex;
+    justify-content: center;
+}
+
+.container {
+    width: 100%;
+    max-width: 1200px;
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+header {
+    text-align: center;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+header h1 {
+    color: #4a4a4a;
+}
+
+.main-content {
+    display: flex;
+    gap: 20px;
+}
+
+.sidebar {
+    flex: 1;
+    min-width: 250px;
+}
+
+.editor-section {
+    flex: 3;
+    min-width: 0; /* Prevents the editor from expanding horizontally */
+}
+
+h2 {
+    color: #333;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 5px;
+    margin-top: 0;
+}
+
+#rooms-dropdown {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+
+#leaderboard-container {
+    background-color: #fafafa;
+    border: 1px solid #eee;
+    padding: 15px;
+    border-radius: 4px;
+    height: 400px;
+    overflow-y: auto;
+}
+
+#leaderboard {
+    list-style-type: none;
+    padding-left: 0;
+    margin: 0;
+}
+
+#leaderboard li {
+    background-color: #fff;
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    border: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#leaderboard li .player-name {
+    font-weight: bold;
+}
+
+#leaderboard li .player-score {
+    background-color: #e3f2fd;
+    color: #1565c0;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.9em;
+}
+
+#monaco-editor {
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+#submit-button {
+    background-color: #4caf50; /* Green */
+    color: white;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    margin-top: 15px;
+    width: 100%;
+    transition: background-color 0.3s;
+}
+
+#submit-button:hover {
+    background-color: #45a049;
+}
+
+#submit-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
