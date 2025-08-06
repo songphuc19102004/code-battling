@@ -124,3 +124,38 @@ h2 {
     background-color: #ccc;
     cursor: not-allowed;
 }
+
+#create-room-section {
+    margin-top: 20px;
+}
+
+#create-room-form input,
+#create-room-form textarea {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    box-sizing: border-box; /* To include padding and border in the element's total width and height */
+}
+
+#create-room-form textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+#create-room-form button {
+    background-color: #008cba; /* Blue */
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 100%;
+    font-size: 1em;
+    transition: background-color 0.3s;
+}
+
+#create-room-form button:hover {
+    background-color: #007b9e;
+}
