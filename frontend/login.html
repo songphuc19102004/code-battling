@@ -9,9 +9,11 @@
     <body>
         <div class="login-container">
             <div class="login-box">
-                <h1>Welcome to Code Battle</h1>
-                <p>Please enter your name to join the arena.</p>
-                <form id="login-form">
+                <h1 id="form-title">Login to Code Battle</h1>
+                <p id="form-subtitle">
+                    Enter your credentials to join the arena.
+                </p>
+                <form id="auth-form">
                     <input
                         type="text"
                         id="player-name-input"
@@ -19,8 +21,19 @@
                         required
                         autofocus
                     />
-                    <button type="submit">Enter Arena</button>
+                    <input
+                        type="password"
+                        id="player-password-input"
+                        placeholder="Enter your password"
+                        required
+                    />
+                    <button type="submit" id="submit-button">Login</button>
                 </form>
+                <p class="toggle-form-text">
+                    <a href="#" id="toggle-form-link"
+                        >Need an account? Register here.</a
+                    >
+                </p>
             </div>
         </div>
         <script src="login.js"></script>

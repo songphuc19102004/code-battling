@@ -1,6 +1,9 @@
 package store
 
 import (
+	"errors"
+	"log"
+	"sort"
 	"sync"
 )
 
@@ -82,6 +85,17 @@ func (s *Store) GetPlayer(playerId int) (*Player, bool) {
 	return player, ok
 }
 
+func (s *Store) GetPlayerByName(name string) (*Player, bool) {
+	s.playersMu.RLock()
+	defer s.playersMu.RUnlock()
+	for _, player := range s.players {
+		if player.Name == name {
+			return player, true
+		}
+	}
+	return nil, false
+}
+
 func (s *Store) GetAllPlayers() map[int]*Player {
 	s.playersMu.RLock()
 	defer s.playersMu.RUnlock()
@@ -125,17 +139,128 @@ func (s *Store) SetRoomPlayers(roomId int, roomPlayers []*RoomPlayer) {
 	s.roomPlayers[roomId] = roomPlayers
 }
 
-// UpdateRoomPlayersWithLock allows thread-safe updates to room players using a callback function
-func (s *Store) UpdateRoomPlayersWithLock(roomId int, updateFunc func([]*RoomPlayer) []*RoomPlayer) {
+func (s *Store) AddRoomPlayer(roomId int, player *RoomPlayer) {
+	s.roomPlayersMu.Lock()
+	defer s.roomPlayersMu.Unlock()
+	roomPlayers, ok := s.roomPlayers[roomId]
+	if !ok {
+		roomPlayers = make([]*RoomPlayer, 0)
+	}
+	roomPlayers = append(roomPlayers, player)
+	s.roomPlayers[roomId] = roomPlayers
+}
+
+func (s *Store) PlayerInRoom(roomId int, playerId int) bool {
+	s.roomPlayersMu.RLock()
+	defer s.roomPlayersMu.RUnlock()
+	roomPlayers, ok := s.roomPlayers[roomId]
+	if !ok {
+		return false
+	}
+	for _, player := range roomPlayers {
+		if player.PlayerID == playerId {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Store) UpdatePlayerScoreAndRecalculateLeaderboard(roomId int, playerId int, scoreChange int) error {
 	s.roomPlayersMu.Lock()
 	defer s.roomPlayersMu.Unlock()
 
 	roomPlayers, ok := s.roomPlayers[roomId]
 	if !ok {
-		roomPlayers = []*RoomPlayer{}
+		return errors.New("room not found")
 	}
 
-	s.roomPlayers[roomId] = updateFunc(roomPlayers)
+	// Find player and update score
+	var playerFound bool
+	for _, player := range roomPlayers {
+		if player.PlayerID == playerId {
+			player.Score += scoreChange
+			playerFound = true
+			break
+		}
+	}
+
+	if !playerFound {
+		return errors.New("player not found in room")
+	}
+
+	// Sort the players by score descending
+	sort.Slice(roomPlayers, func(i, j int) bool {
+		return roomPlayers[i].Score > roomPlayers[j].Score
+	})
+
+	// Update placement
+	for i, player := range roomPlayers {
+		player.Place = i + 1
+	}
+
+	return nil
+}
+
+// Update a specific room player
+func (s *Store) UpdateRoomPlayer(roomId int, p *RoomPlayer) error {
+	logger := log.Default()
+	logger.Println("UpdateRoomPlayer() hit in store.go")
+	logger.Printf("Update roomplayer %v for roomID %v", p, roomId)
+
+	s.roomPlayersMu.Lock()
+	defer s.roomPlayersMu.Unlock()
+
+	roomPlayers, ok := s.roomPlayers[roomId]
+	if !ok {
+		return errors.New("room not found")
+	}
+
+	var targetPlayer *RoomPlayer
+	for _, player := range roomPlayers {
+		if player.PlayerID == p.PlayerID {
+			targetPlayer = player
+			break
+		}
+	}
+
+	if targetPlayer == nil {
+		return errors.New("player not found in room")
+	}
+
+	targetPlayer.Score = p.Score
+	targetPlayer.Place = p.Place
+
+	return nil
+}
+
+func (s *Store) GetLeaderboardForRoom(roomId int) ([]LeaderboardEntry, error) {
+	s.roomPlayersMu.RLock()
+	s.playersMu.RLock()
+	defer s.roomPlayersMu.RUnlock()
+	defer s.playersMu.RUnlock()
+
+	roomPlayers, ok := s.roomPlayers[roomId]
+	if !ok {
+		return nil, errors.New("room not found")
+	}
+
+	var leaderboardEntries []LeaderboardEntry
+
+	for _, rp := range roomPlayers {
+		player, ok := s.players[rp.PlayerID]
+		if !ok {
+			// This is the condition that was causing the panic.
+			// By handling it here, we prevent the nil pointer dereference.
+			log.Printf("Player with ID %d found in room %d but not in global players list. Skipping.", rp.PlayerID, roomId)
+			continue
+		}
+		leaderboardEntries = append(leaderboardEntries, LeaderboardEntry{
+			PlayerName: player.Name,
+			Score:      rp.Score,
+			Place:      rp.Place,
+		})
+	}
+	return leaderboardEntries, nil
 }
 
 // initInMemoryData populates the store with initial seed data
@@ -160,11 +285,11 @@ func (s *Store) initInMemoryData() {
 
 	// Initialize Players
 	s.players = map[int]*Player{
-		1: {ID: 1, Name: "Alice"},
-		2: {ID: 2, Name: "Bob"},
-		3: {ID: 3, Name: "Charlie"},
-		4: {ID: 4, Name: "David"},
-		5: {ID: 5, Name: "Phuc"},
+		1: {ID: 1, Name: "alice", Password: "123"},
+		2: {ID: 2, Name: "bob", Password: "123"},
+		3: {ID: 3, Name: "charlie", Password: "123"},
+		4: {ID: 4, Name: "david", Password: "123"},
+		5: {ID: 5, Name: "phuc", Password: "123"},
 	}
 
 	s.questions = map[int]*Question{

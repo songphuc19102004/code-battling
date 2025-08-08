@@ -30,6 +30,7 @@ func (app *Application) routes() http.Handler {
 
 	mux.Route("/players", func(r chi.Router) {
 		r.Post("/", app.handlers.CreatePlayerHandler)
+		r.Post("/login", app.handlers.LoginHandler)
 	})
 
 	return mux

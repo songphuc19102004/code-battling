@@ -2,14 +2,20 @@ package events
 
 import "time"
 
-// Generic constraints
-type EventType interface {
-	SolutionSubmitted | PlayerJoined | PlayerLeft
-}
+type EventType string
 
-// Event wrapper
-type Event[Type EventType] struct {
-	Data *Type
+const (
+	CORRECT_SOLUTION_SUBMITTED EventType = "CORRECT_SOLUTION_SUBMITTED"
+	SOLUTION_SUBMITTED         EventType = "SOLUTION_SUBMITTED"
+	PLAYER_JOINED              EventType = "PLAYER_JOINED"
+	PLAYER_LEFT                EventType = "PLAYER_LEFT"
+	ROOM_DELETED               EventType = "ROOM_DELETED"
+)
+
+// Event wrapper for the listener
+type SseEvent struct {
+	EventType EventType
+	Data      any
 }
 
 type SolutionSubmitted struct {
@@ -21,9 +27,18 @@ type SolutionSubmitted struct {
 	SubmittedTime time.Time
 }
 
+type CorrectSolutionResult struct {
+	SolutionSubmitted SolutionSubmitted
+	RoomID            int
+}
+
+type LeaderboardUpdated struct {
+	RoomId int
+}
+
 type PlayerJoined struct {
-	PlayerId int
-	RoomId   int
+	PlayerID int
+	RoomID   int
 }
 
 type PlayerLeft struct {

@@ -119,18 +119,49 @@ document.addEventListener("DOMContentLoaded", () => {
       `${apiBaseUrl}/events?room_id=${roomId}&player_id=${currentPlayer.id}`,
     );
 
-    leaderboardEventSource.onmessage = (event) => {
-      console.log("Received room event:", event.data);
-      // When we receive an event, refresh the leaderboard
+    const handleLeaderboardUpdate = (event) => {
+      console.log(
+        `Leaderboard-updating event received: ${event.type}. Refreshing leaderboard.`,
+      );
+      console.log("Event data:", event.data);
       fetchLeaderboard(roomId);
     };
+
+    // These events indicate that the leaderboard state has changed.
+    leaderboardEventSource.addEventListener(
+      "CORRECT_SOLUTION_SUBMITTED",
+      handleLeaderboardUpdate,
+    );
+    leaderboardEventSource.addEventListener(
+      "PLAYER_JOINED",
+      handleLeaderboardUpdate,
+    );
+    leaderboardEventSource.addEventListener(
+      "PLAYER_LEFT",
+      handleLeaderboardUpdate,
+    );
+
+    // This event indicates a room was removed, so we need to update the room list.
+    leaderboardEventSource.addEventListener("ROOM_DELETED", (event) => {
+      console.log("Room deleted event received:", event.data);
+      alert("A room has been deleted. The interface will now refresh.");
+
+      // Reset the current room selection
+      currentRoomId = null;
+      roomsDropdown.value = "";
+      submitButton.disabled = true;
+      updateLeaderboard([]); // Clear leaderboard
+
+      // Refresh the list of available rooms
+      fetchRooms();
+    });
 
     leaderboardEventSource.onerror = (error) => {
       console.error(
         "SSE connection error. The browser will attempt to reconnect automatically.",
         error,
       );
-      // By not calling close(), we allow the browser to handle reconnection attempts.
+      // The browser will handle reconnection automatically.
     };
   }
 
@@ -139,21 +170,29 @@ document.addEventListener("DOMContentLoaded", () => {
    * @param {Array} entries - An array of leaderboard entry objects.
    */
   function updateLeaderboard(entries) {
-    leaderboardList.innerHTML = ""; // Clear current list
+    // Always clear the current list first to prevent duplicates.
+    leaderboardList.innerHTML = "";
+
     if (!entries || entries.length === 0) {
       leaderboardList.innerHTML = "<li>No leaderboard data available.</li>";
       return;
     }
 
+    // Create a document fragment to build the new list in memory.
+    const fragment = document.createDocumentFragment();
+
     entries.forEach((entry) => {
       const li = document.createElement("li");
       li.innerHTML = `
                 <span class="player-place">${entry.place}.</span>
-                <span class="player-name">Player ${entry.player_id}</span>
+                <span class="player-name">${entry.player_name}</span>
                 <span class="player-score">${entry.score} points</span>
             `;
-      leaderboardList.appendChild(li);
+      fragment.appendChild(li);
     });
+
+    // Append the entire new list at once.
+    leaderboardList.appendChild(fragment);
   }
 
   /**
@@ -196,10 +235,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       console.log("Solution submitted successfully!");
-      alert("Solution submitted!");
 
       // Refresh leaderboard after submission
-      setTimeout(() => fetchLeaderboard(currentRoomId), 1000);
+      setTimeout(() => fetchLeaderboard(currentRoomId), 100);
     } catch (error) {
       console.error("Failed to submit solution:", error);
       alert(`Error submitting solution: ${error.message}`);

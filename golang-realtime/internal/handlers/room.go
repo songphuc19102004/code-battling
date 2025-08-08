@@ -84,31 +84,3 @@ func (hr *HandlerRepo) DeleteRoomHandler(w http.ResponseWriter, r *http.Request)
 
 	response.JSON(w, http.StatusOK, nil, false, "delete room successfully")
 }
-
-type CreatePlayerRequest struct {
-	Name string `json:"name"`
-}
-
-// CreatePlayerHandler handles the creation of a new player.
-func (hr *HandlerRepo) CreatePlayerHandler(w http.ResponseWriter, r *http.Request) {
-	var req CreatePlayerRequest
-	if err := request.DecodeJSON(w, r, &req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, true, err.Error())
-		return
-	}
-
-	// Note: Simple ID generation. In a real-world scenario, use UUIDs or a database sequence.
-	newPlayer := &store.Player{
-		ID:   hr.store.GetPlayersCount() + 1,
-		Name: req.Name,
-	}
-
-	hr.store.CreatePlayer(newPlayer)
-	hr.logger.Info("New player created", "player_id", newPlayer.ID, "name", newPlayer.Name)
-	hr.logger.Info("Player list now is", "playerList", hr.store.GetAllPlayers())
-
-	err := response.JSON(w, http.StatusCreated, newPlayer, false, "Player created successfully")
-	if err != nil {
-		response.JSON(w, http.StatusInternalServerError, nil, true, err.Error())
-	}
-}

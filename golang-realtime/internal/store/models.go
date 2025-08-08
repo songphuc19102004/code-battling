@@ -1,8 +1,9 @@
 package store
 
 type Player struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+	ID       int    `json:"id"`
+	Name     string `json:"name"`
+	Password string `json:"-"`
 }
 
 type Room struct {
@@ -28,4 +29,9 @@ type Question struct {
 	Description string `json:"description"`
 	Score       int    `json:"score"`
 	Difficulty  int    `json:"difficulty"`
+}
+type LeaderboardEntry struct {
+	PlayerName string `json:"player_name"`
+	Score      int    `json:"score"`
+	Place      int    `json:"place"`
 }
