@@ -1,3 +1,4 @@
+<!-- frontend/index.html -->
 <!doctype html>
 <html lang="en">
     <head>
@@ -18,6 +19,10 @@
                     <select id="rooms-dropdown" name="rooms">
                         <option value="">--Select a Room--</option>
                     </select>
+
+                    <button id="leave-room-button" style="display: none">
+                        Leave Room
+                    </button>
 
                     <h2>Leaderboard</h2>
                     <div id="leaderboard-container">
@@ -54,6 +59,9 @@
                         "
                     ></div>
                     <button id="submit-button">Submit Solution</button>
+                    <div id="error-log-container">
+                        <pre id="error-log"></pre>
+                    </div>
                 </div>
             </main>
         </div>

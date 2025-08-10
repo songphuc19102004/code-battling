@@ -45,6 +45,9 @@ func (hr *HandlerRepo) EventHandler(w http.ResponseWriter, r *http.Request) {
 		roomManager.Mu.Lock()
 		delete(roomManager.Listerners, playerId)
 		roomManager.Mu.Unlock()
+		go func() {
+			roomManager.Events <- events.PlayerLeft{PlayerId: playerId, RoomId: roomId}
+		}()
 	}()
 
 	hr.logger.Info("SSE connection established", "player_id", playerId, "room_id", roomId)

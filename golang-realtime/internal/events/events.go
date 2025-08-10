@@ -1,11 +1,15 @@
 package events
 
-import "time"
+import (
+	"golang-realtime/internal/crunner"
+	"time"
+)
 
 type EventType string
 
 const (
 	CORRECT_SOLUTION_SUBMITTED EventType = "CORRECT_SOLUTION_SUBMITTED"
+	WRONG_SOLUTION_SUBMITTED   EventType = "WRONG_SOLUTION_SUBMITTED"
 	SOLUTION_SUBMITTED         EventType = "SOLUTION_SUBMITTED"
 	PLAYER_JOINED              EventType = "PLAYER_JOINED"
 	PLAYER_LEFT                EventType = "PLAYER_LEFT"
@@ -27,9 +31,10 @@ type SolutionSubmitted struct {
 	SubmittedTime time.Time
 }
 
-type CorrectSolutionResult struct {
+type SolutionResult struct {
 	SolutionSubmitted SolutionSubmitted
-	RoomID            int
+	Correct           bool
+	RunResult         crunner.RunResult
 }
 
 type LeaderboardUpdated struct {

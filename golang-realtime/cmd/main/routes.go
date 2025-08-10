@@ -26,6 +26,8 @@ func (app *Application) routes() http.Handler {
 		r.Delete("/{roomId}", app.handlers.DeleteRoomHandler)
 
 		r.Get("/{roomId}/leaderboard", app.handlers.GetLeaderboardHandler)
+
+		r.Delete("/{roomId}/players/{playerId}", app.handlers.LeaveRoomHandler)
 	})
 
 	mux.Route("/players", func(r chi.Router) {

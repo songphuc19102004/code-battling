@@ -1,3 +1,4 @@
+// frontend/app.js
 document.addEventListener("DOMContentLoaded", () => {
   const apiBaseUrl = "http://localhost:8080";
   let monacoEditor;
@@ -20,11 +21,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const leaderboardList = document.getElementById("leaderboard");
   const editorContainer = document.getElementById("monaco-editor");
   const submitButton = document.getElementById("submit-button");
+  const leaveRoomButton = document.getElementById("leave-room-button");
   const createRoomForm = document.getElementById("create-room-form");
   const roomNameInput = document.getElementById("room-name-input");
   const roomDescriptionInput = document.getElementById(
     "room-description-input",
   );
+  const errorLogContainer = document.getElementById("error-log-container");
+  const errorLog = document.getElementById("error-log");
 
   // --- Monaco Editor Initialization ---
   require.config({
@@ -44,6 +48,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     // Initially disable the submit button until a room is selected
     submitButton.disabled = true;
+
+    // Clear error log when user starts typing
+    monacoEditor.onDidChangeModelContent(() => {
+      if (errorLogContainer.style.display === "block") {
+        errorLogContainer.style.display = "none";
+      }
+    });
   });
 
   // --- API and Logic Functions ---
@@ -141,6 +152,33 @@ document.addEventListener("DOMContentLoaded", () => {
       handleLeaderboardUpdate,
     );
 
+    // Handle wrong submissions specifically to show logs
+    leaderboardEventSource.addEventListener(
+      "WRONG_SOLUTION_SUBMITTED",
+      (event) => {
+        console.log("Wrong solution event received:", event.data);
+        try {
+          const eventPayload = JSON.parse(event.data);
+
+          // The backend sends the log in the format "log:THE_ACTUAL_LOG"
+          // in the `Data` field of the event payload.
+          let logMessage = "An unknown error occurred.";
+          if (eventPayload && typeof eventPayload.Data === "string") {
+            logMessage = eventPayload.Data.startsWith("log:")
+              ? eventPayload.Data.substring(4)
+              : eventPayload.Data;
+          }
+
+          errorLog.textContent = logMessage;
+          errorLogContainer.style.display = "block";
+        } catch (e) {
+          console.error("Failed to parse wrong solution event data:", e);
+          errorLog.textContent = "Failed to display error log.";
+          errorLogContainer.style.display = "block";
+        }
+      },
+    );
+
     // This event indicates a room was removed, so we need to update the room list.
     leaderboardEventSource.addEventListener("ROOM_DELETED", (event) => {
       console.log("Room deleted event received:", event.data);
@@ -150,6 +188,7 @@ document.addEventListener("DOMContentLoaded", () => {
       currentRoomId = null;
       roomsDropdown.value = "";
       submitButton.disabled = true;
+      leaveRoomButton.style.display = "none";
       updateLeaderboard([]); // Clear leaderboard
 
       // Refresh the list of available rooms
@@ -169,6 +208,7 @@ document.addEventListener("DOMContentLoaded", () => {
    * Renders the leaderboard in the UI.
    * @param {Array} entries - An array of leaderboard entry objects.
    */
+
   function updateLeaderboard(entries) {
     // Always clear the current list first to prevent duplicates.
     leaderboardList.innerHTML = "";
@@ -203,6 +243,9 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("Please select a room first.");
       return;
     }
+
+    // Hide any previous error messages before a new submission.
+    errorLogContainer.style.display = "none";
 
     const code = monacoEditor.getValue();
 
@@ -244,6 +287,58 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  /**
+   * Handles leaving the current room.
+   */
+  async function leaveRoom() {
+    if (!currentRoomId) {
+      alert("No room selected to leave.");
+      return;
+    }
+
+    const confirmation = confirm(
+      "Are you sure you want to leave this room? Your progress in this room will be lost.",
+    );
+
+    if (!confirmation) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/rooms/${currentRoomId}/players/${currentPlayer.id}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to leave room.");
+      }
+
+      console.log("Successfully left the room");
+
+      // Reset the UI state
+      currentRoomId = null;
+      roomsDropdown.value = "";
+      submitButton.disabled = true;
+      leaveRoomButton.style.display = "none";
+      updateLeaderboard([]);
+
+      // Close the SSE connection
+      if (leaderboardEventSource) {
+        leaderboardEventSource.close();
+        leaderboardEventSource = null;
+      }
+
+      alert("You have successfully left the room.");
+    } catch (error) {
+      console.error("Failed to leave room:", error);
+      alert(`Error leaving room: ${error.message}`);
+    }
+  }
+
   // --- Event Listeners ---
 
   roomsDropdown.addEventListener("change", () => {
@@ -251,16 +346,23 @@ document.addEventListener("DOMContentLoaded", () => {
     submitButton.disabled = !currentRoomId; // Enable button only if a room is selected
 
     if (currentRoomId) {
+      // Show the leave room button when a room is selected
+      leaveRoomButton.style.display = "block";
+
       // Fetch initial leaderboard data
       fetchLeaderboard(currentRoomId);
       // Connect to SSE for real-time updates
       connectToRoomEvents(currentRoomId);
     } else {
+      // Hide the leave room button when no room is selected
+      leaveRoomButton.style.display = "none";
       updateLeaderboard([]);
     }
   });
 
   submitButton.addEventListener("click", submitSolution);
+
+  leaveRoomButton.addEventListener("click", leaveRoom);
 
   /**
    * Handles the submission of the create room form.

@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"golang-realtime/internal/events"
 	"golang-realtime/internal/store"
 	"golang-realtime/pkg/common/request"
 	"golang-realtime/pkg/common/response"
 	"net/http"
 	"strconv"
+
+	"github.com/go-chi/chi/v5"
 	// Import sync package
 )
 
@@ -65,7 +68,7 @@ func (hr *HandlerRepo) CreateRoomHandler(w http.ResponseWriter, r *http.Request)
 }
 
 func (hr *HandlerRepo) DeleteRoomHandler(w http.ResponseWriter, r *http.Request) {
-	roomIdStr := r.URL.Query().Get("roomId") // Keeping query parameter as chi.URLParam requires chi import
+	roomIdStr := chi.URLParam(r, "room_id")
 	roomId, err := strconv.Atoi(roomIdStr)
 	if err != nil {
 		response.JSON(w, http.StatusBadRequest, nil, true, "invalid room id")
@@ -78,9 +81,58 @@ func (hr *HandlerRepo) DeleteRoomHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Delete room from memory and also delete its broadcaster
-	// TODO: Implement some kind of pub/sub
-	hr.store.DeleteRoom(roomId)
+	roomManager := hr.gr.GetRoomById(roomId)
+	if roomManager == nil {
+		response.JSON(w, http.StatusNotFound, nil, true, "room not found")
+		return
+	}
+
+	go func() {
+		e := events.RoomDeleted{
+			RoomId: roomId,
+		}
+		roomManager.Events <- e
+	}()
 
 	response.JSON(w, http.StatusOK, nil, false, "delete room successfully")
+}
+
+func (hr *HandlerRepo) LeaveRoomHandler(w http.ResponseWriter, r *http.Request) {
+	roomIdParam := chi.URLParam(r, "roomId")
+	playerIdParam := chi.URLParam(r, "playerId")
+
+	roomId, err := strconv.Atoi(roomIdParam)
+	if err != nil {
+		response.JSON(w, http.StatusBadRequest, nil, true, "invalid room id")
+		return
+	}
+
+	playerId, err := strconv.Atoi(playerIdParam)
+	if err != nil {
+		response.JSON(w, http.StatusBadRequest, nil, true, "invalid player id")
+		return
+	}
+
+	// Check if room exists before attempting to leave
+	roomManager := hr.gr.GetRoomById(roomId)
+	if roomManager == nil {
+		response.JSON(w, http.StatusNotFound, nil, false, "room not found")
+		return
+	}
+
+	// Check if player exists before attempting to leave
+	if _, exists := hr.store.GetPlayer(playerId); !exists {
+		response.JSON(w, http.StatusNotFound, nil, true, "player not found")
+		return
+	}
+
+	go func() {
+		e := events.PlayerLeft{
+			PlayerId: playerId,
+			RoomId:   roomId,
+		}
+		roomManager.Events <- e
+	}()
+
+	response.JSON(w, http.StatusOK, nil, false, "leave room successfully")
 }

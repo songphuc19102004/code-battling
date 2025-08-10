@@ -2,6 +2,7 @@ package main
 
 import (
 	"golang-realtime/internal/channels"
+	"golang-realtime/internal/crunner"
 	"golang-realtime/internal/handlers"
 
 	"golang-realtime/internal/store"
@@ -36,7 +37,11 @@ func main() {
 	slog.SetDefault(logger) // Set default for any library using slog's default logger
 
 	store := store.NewStore()
-	gr := channels.NewGlobalRooms(store)
+
+	dockerClient := crunner.NewDockerClient()
+	drunner := crunner.NewDockerRunner(dockerClient)
+	gr := channels.NewGlobalRooms(store, drunner)
+
 	handlerRepo := handlers.NewHandlerRepo(logger, gr, store)
 
 	app := &Application{

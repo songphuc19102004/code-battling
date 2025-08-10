@@ -150,9 +150,35 @@ func (s *Store) AddRoomPlayer(roomId int, player *RoomPlayer) {
 	s.roomPlayers[roomId] = roomPlayers
 }
 
+func (s *Store) RemoveRoomPlayer(roomId int, playerId int) {
+	s.roomPlayersMu.Lock()
+	defer s.roomPlayersMu.Unlock()
+	logger := log.Default()
+
+	logger.Printf("len room players before %v", len(s.roomPlayers[roomId]))
+	logger.Printf("room players before\n")
+	for _, player := range s.roomPlayers[roomId] {
+		logger.Printf("room player %v", *player)
+	}
+
+	for i := range s.roomPlayers[roomId] {
+		if s.roomPlayers[roomId][i].PlayerID == playerId {
+			s.roomPlayers[roomId] = append(s.roomPlayers[roomId][:i], s.roomPlayers[roomId][i+1:]...)
+			break
+		}
+	}
+
+	logger.Printf("len room players AFTER %v", len(s.roomPlayers[roomId]))
+	logger.Printf("room players AFTER\n")
+	for _, player := range s.roomPlayers[roomId] {
+		logger.Printf("room player %v", *player)
+	}
+}
+
 func (s *Store) PlayerInRoom(roomId int, playerId int) bool {
 	s.roomPlayersMu.RLock()
 	defer s.roomPlayersMu.RUnlock()
+
 	roomPlayers, ok := s.roomPlayers[roomId]
 	if !ok {
 		return false
@@ -186,6 +212,28 @@ func (s *Store) UpdatePlayerScoreAndRecalculateLeaderboard(roomId int, playerId 
 
 	if !playerFound {
 		return errors.New("player not found in room")
+	}
+
+	// Sort the players by score descending
+	sort.Slice(roomPlayers, func(i, j int) bool {
+		return roomPlayers[i].Score > roomPlayers[j].Score
+	})
+
+	// Update placement
+	for i, player := range roomPlayers {
+		player.Place = i + 1
+	}
+
+	return nil
+}
+
+func (s *Store) CalculateLeaderboard(roomId int) error {
+	s.roomPlayersMu.Lock()
+	defer s.roomPlayersMu.Unlock()
+
+	roomPlayers, ok := s.roomPlayers[roomId]
+	if !ok {
+		return errors.New("room not found")
 	}
 
 	// Sort the players by score descending
