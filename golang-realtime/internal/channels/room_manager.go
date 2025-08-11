@@ -1,6 +1,7 @@
 package channels
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"golang-realtime/internal/crunner"
@@ -8,6 +9,9 @@ import (
 	"golang-realtime/internal/store"
 	"log/slog"
 	"sync"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // event-based
@@ -15,12 +19,12 @@ import (
 // events is a single queue that received events from multiple sources and process it, then send to all listeners
 // listeners are all the clients connected to the room, represented by their client IDs
 type RoomManager struct {
-	RoomId     int
+	RoomId     int32
 	Events     chan any
-	Listerners map[int]chan<- events.SseEvent
+	Listerners map[int32]chan<- events.SseEvent
 	crunner    crunner.CRunner
 	logger     *slog.Logger
-	store      *store.Store
+	queries    *store.Queries
 	Mu         sync.RWMutex
 }
 
@@ -28,16 +32,16 @@ type RoomManager struct {
 type GlobalRooms struct {
 	Mu sync.RWMutex
 	// roomId -> roomManager
-	Rooms   map[int]*RoomManager
+	Rooms   map[int32]*RoomManager
 	crunner crunner.CRunner
 }
 
-func NewGlobalRooms(store *store.Store, crunner crunner.CRunner) *GlobalRooms {
+func NewGlobalRooms(queries *store.Queries, crunner crunner.CRunner) *GlobalRooms {
 	// Initialize testing rooms for development
-	rooms := map[int]*RoomManager{
-		1: NewRoomManager(1, store, crunner),
-		2: NewRoomManager(2, store, crunner),
-		3: NewRoomManager(3, store, crunner),
+	rooms := map[int32]*RoomManager{
+		1: NewRoomManager(1, queries, crunner),
+		2: NewRoomManager(2, queries, crunner),
+		3: NewRoomManager(3, queries, crunner),
 	}
 
 	for _, rm := range rooms {
@@ -50,27 +54,28 @@ func NewGlobalRooms(store *store.Store, crunner crunner.CRunner) *GlobalRooms {
 	}
 }
 
-func (gr *GlobalRooms) GetRoomById(roomId int) *RoomManager {
+func (gr *GlobalRooms) GetRoomById(roomId int32) *RoomManager {
 	gr.Mu.RLock()
 	defer gr.Mu.RUnlock()
 	return gr.Rooms[roomId]
 }
 
-func (gr *GlobalRooms) CreateRoom(roomId int, store *store.Store) *RoomManager {
-	rm := NewRoomManager(roomId, store, gr.crunner)
+func (gr *GlobalRooms) CreateRoom(roomId int32, queries *store.Queries) *RoomManager {
+	rm := NewRoomManager(roomId, queries, gr.crunner)
 	gr.Mu.Lock()
 	gr.Rooms[roomId] = rm
 	gr.Mu.Unlock()
+	go rm.Start() // Start the room manager
 	return rm
 }
 
-func NewRoomManager(roomId int, store *store.Store, crunner crunner.CRunner) *RoomManager {
+func NewRoomManager(roomId int32, queries *store.Queries, crunner crunner.CRunner) *RoomManager {
 	return &RoomManager{
 		RoomId:     roomId,
 		Events:     make(chan any),
-		Listerners: make(map[int]chan<- events.SseEvent),
+		Listerners: make(map[int32]chan<- events.SseEvent),
 		logger:     slog.Default(),
-		store:      store,
+		queries:    queries,
 		Mu:         sync.RWMutex{},
 		crunner:    crunner,
 	}
@@ -114,7 +119,7 @@ func (rm *RoomManager) dispatchEvent(e events.SseEvent) {
 		return
 	}
 
-	listeners := make(map[int]chan<- events.SseEvent)
+	listeners := make(map[int32]chan<- events.SseEvent)
 	for pid, listener := range rm.Listerners {
 		listeners[pid] = listener
 	}
@@ -126,7 +131,7 @@ func (rm *RoomManager) dispatchEvent(e events.SseEvent) {
 
 	for playerId, listener := range listeners {
 		// Capture the listener variable properly
-		go func(l chan<- events.SseEvent, pid int) {
+		go func(l chan<- events.SseEvent, pid int32) {
 			defer func() {
 				if r := recover(); r != nil {
 					rm.logger.Error("panic while dispatching event", "error", r, "player_id", pid, "event", e)
@@ -146,7 +151,7 @@ func (rm *RoomManager) dispatchEvent(e events.SseEvent) {
 	}
 }
 
-func (rm *RoomManager) dispatchEventToPlayer(e events.SseEvent, playerID int) {
+func (rm *RoomManager) dispatchEventToPlayer(e events.SseEvent, playerID int32) {
 	rm.Mu.RLock()
 	if rm.Listerners == nil {
 		rm.Mu.RUnlock()
@@ -164,12 +169,14 @@ func (rm *RoomManager) dispatchEventToPlayer(e events.SseEvent, playerID int) {
 
 	if listener == nil {
 		rm.logger.Error("listener not found", "player_id", playerID)
+		rm.Mu.RUnlock()
+		return
 	}
 
 	rm.Mu.RUnlock()
 
 	// Capture the listener variable properly
-	go func(l chan<- events.SseEvent, pid int) {
+	go func(l chan<- events.SseEvent, pid int32) {
 		defer func() {
 			if r := recover(); r != nil {
 				rm.logger.Error("panic while dispatching event", "error", r, "player_id", pid, "event", e)
@@ -212,6 +219,9 @@ func (rm *RoomManager) processSolutionSubmitted(event events.SolutionSubmitted) 
 
 // This function will work with database (updating tables) and send the fetchLeaderboard event to the frontend
 func (rm *RoomManager) processSolutionResult(e events.SolutionResult) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
 	rm.logger.Info("processCorrectSoltuionResult() hit", "event", e)
 
 	// compiled failed
@@ -228,11 +238,11 @@ func (rm *RoomManager) processSolutionResult(e events.SolutionResult) error {
 		return nil
 	}
 
-	// TODO: refactor two 2 separate functions
-	err := rm.store.UpdatePlayerScoreAndRecalculateLeaderboard(e.SolutionSubmitted.RoomId, e.SolutionSubmitted.PlayerId, 50)
-	if err != nil {
-		return err
-	}
+	rm.queries.AddRoomPlayerScore(ctx, store.AddRoomPlayerScoreParams{
+		RoomID:      e.SolutionSubmitted.RoomId,
+		PlayerID:    e.SolutionSubmitted.PlayerId,
+		ScoreTooAdd: pgtype.Int4{Int32: 50},
+	})
 
 	sseEvent := events.SseEvent{
 		EventType: events.CORRECT_SOLUTION_SUBMITTED,
@@ -244,23 +254,70 @@ func (rm *RoomManager) processSolutionResult(e events.SolutionResult) error {
 	return nil
 }
 
+// Helper method to check if player is in room
+func (rm *RoomManager) playerInRoom(ctx context.Context, roomID, playerID int32) bool {
+	_, err := rm.queries.GetRoomPlayer(ctx, store.GetRoomPlayerParams{
+		RoomID:   roomID,
+		PlayerID: playerID,
+	})
+	return err == nil
+}
+
+// Helper method to add player to room
+func (rm *RoomManager) addPlayerToRoom(ctx context.Context, roomID, playerID int32) error {
+	createParams := store.CreateRoomPlayerParams{
+		RoomID:   roomID,
+		PlayerID: playerID,
+		Score: pgtype.Int4{
+			Int32: 0,
+			Valid: true,
+		},
+		Place: pgtype.Int4{
+			Int32: 0,
+			Valid: true,
+		},
+	}
+
+	_, err := rm.queries.CreateRoomPlayer(ctx, createParams)
+	return err
+}
+
+// Helper method to remove player from room
+func (rm *RoomManager) removePlayerFromRoom(ctx context.Context, roomID, playerID int32) error {
+	return rm.queries.DeleteRoomPlayer(ctx, store.DeleteRoomPlayerParams{
+		RoomID:   roomID,
+		PlayerID: playerID,
+	})
+}
+
+// Helper method to calculate leaderboard (placeholder)
+func (rm *RoomManager) calculateLeaderboard(ctx context.Context, roomID int32) error {
+	// TODO: Implement leaderboard calculation logic
+	// For now, this is a placeholder
+	rm.logger.Info("Calculating leaderboard for room", "room_id", roomID)
+	return nil
+}
+
 func (rm *RoomManager) processPlayerJoined(event events.PlayerJoined) error {
 	// Process the player joined event
 	// Add player to room
-	player, ok := rm.store.GetPlayer(event.PlayerID)
-	if !ok {
+	ctx := context.Background()
+	player, err := rm.queries.GetPlayer(ctx, event.PlayerID)
+	if err != nil {
 		return errors.New("player not found")
 	}
 
-	if !rm.store.PlayerInRoom(event.RoomID, event.PlayerID) {
-		roomPlayer := &store.RoomPlayer{
-			PlayerID: player.ID,
-			RoomID:   event.RoomID,
-			Score:    0,
-			Place:    0,
+	if !rm.playerInRoom(ctx, event.RoomID, event.PlayerID) {
+		err := rm.addPlayerToRoom(ctx, event.RoomID, player.ID)
+		if err != nil {
+			rm.logger.Error("failed to add player to room", "error", err)
+			return err
 		}
-		rm.store.AddRoomPlayer(event.RoomID, roomPlayer)
-		rm.store.CalculateLeaderboard(event.RoomID)
+
+		err = rm.calculateLeaderboard(ctx, event.RoomID)
+		if err != nil {
+			rm.logger.Error("failed to calculate leaderboard", "error", err)
+		}
 	}
 
 	rm.logger.Info("player joined", "event", event)
@@ -281,12 +338,20 @@ func (rm *RoomManager) processPlayerLeft(event events.PlayerLeft) error {
 	rm.Mu.Lock()
 	defer rm.Mu.Unlock()
 
+	ctx := context.Background()
+
 	// Process the player left event
 	data := fmt.Sprintf("playerId:%d,roomId:%d\n\n", event.PlayerId, rm.RoomId)
 
-	rm.store.RemoveRoomPlayer(event.RoomId, event.PlayerId)
+	err := rm.removePlayerFromRoom(ctx, event.RoomId, event.PlayerId)
+	if err != nil {
+		rm.logger.Error("failed to remove player from room", "error", err)
+	}
 
-	rm.store.CalculateLeaderboard(event.RoomId)
+	err = rm.calculateLeaderboard(ctx, event.RoomId)
+	if err != nil {
+		rm.logger.Error("failed to calculate leaderboard", "error", err)
+	}
 
 	sseEvent := events.SseEvent{
 		EventType: events.PLAYER_LEFT,
@@ -304,6 +369,8 @@ func (rm *RoomManager) processRoomDeleted(event events.RoomDeleted) error {
 	rm.Mu.Lock()
 	defer rm.Mu.Unlock()
 
+	ctx := context.Background()
+
 	// Process the room deleted event
 	data := fmt.Sprintf("roomId:%d\n\n", rm.RoomId)
 
@@ -312,7 +379,10 @@ func (rm *RoomManager) processRoomDeleted(event events.RoomDeleted) error {
 		Data:      data,
 	}
 
-	rm.store.DeleteRoom(event.RoomId)
+	err := rm.queries.DeleteRoom(ctx, event.RoomId)
+	if err != nil {
+		rm.logger.Error("failed to delete room from database", "error", err)
+	}
 
 	rm.logger.Info("room deleted", "roomID", event.RoomId)
 

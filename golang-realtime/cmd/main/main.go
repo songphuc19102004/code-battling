@@ -1,9 +1,11 @@
 package main
 
 import (
+	"golang-realtime/database"
 	"golang-realtime/internal/channels"
 	"golang-realtime/internal/crunner"
 	"golang-realtime/internal/handlers"
+	"golang-realtime/pkg/common/env"
 
 	"golang-realtime/internal/store"
 	"log"
@@ -12,6 +14,7 @@ import (
 	"runtime/debug"
 	"sync"
 
+	"github.com/joho/godotenv"
 	"github.com/lmittmann/tint"
 )
 
@@ -19,7 +22,7 @@ type Application struct {
 	wg       sync.WaitGroup
 	cfg      *Config
 	logger   *slog.Logger
-	store    *store.Store
+	queries  *store.Queries
 	gr       *channels.GlobalRooms
 	handlers *handlers.HandlerRepo
 }
@@ -29,6 +32,10 @@ type Config struct {
 }
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
 
 	cfg := &Config{Port: 8080}
 
@@ -36,18 +43,29 @@ func main() {
 	logger := slog.New(slogHandler)
 	slog.SetDefault(logger) // Set default for any library using slog's default logger
 
-	store := store.NewStore()
+	// test area
+	connStr := env.GetString("DATABASE_URL", "")
+	if connStr == "" {
+		panic("DATABASE_URL environment variable is not set")
+	}
+
+	db, err := database.New(connStr)
+	if err != nil {
+		panic(err)
+	}
+
+	queries := store.New(db)
 
 	dockerClient := crunner.NewDockerClient()
 	drunner := crunner.NewDockerRunner(dockerClient)
-	gr := channels.NewGlobalRooms(store, drunner)
+	gr := channels.NewGlobalRooms(queries, drunner)
 
-	handlerRepo := handlers.NewHandlerRepo(logger, gr, store)
+	handlerRepo := handlers.NewHandlerRepo(logger, gr, queries)
 
 	app := &Application{
 		cfg:      cfg,
 		logger:   logger,
-		store:    store,
+		queries:  queries,
 		gr:       gr,
 		handlers: handlerRepo,
 	}
@@ -57,7 +75,7 @@ func main() {
 	// 	panic(err)
 	// }
 
-	err := app.run()
+	err = app.run()
 	if err != nil {
 		// Using standard log here to be absolutely sure it prints if slog itself had an issue
 		log.Printf("CRITICAL ERROR from run(): %v\n", err)

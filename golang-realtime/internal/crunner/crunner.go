@@ -18,16 +18,13 @@ type CRunner interface {
 	Run(logger *slog.Logger) (RunResult, error)
 }
 
-type RunRequest struct {
-	Language  string
-	Code      string
-	TestCases []string
-}
-
 type RunResult struct {
-	Result   Result
-	Log      string
-	ExitCode int
+	Result          Result
+	TotalTestCases  int
+	TestCasesPassed int
+	FailedTestCase  any
+	Log             string
+	ExitCode        int
 }
 
 func NewDockerClient() *client.Client {

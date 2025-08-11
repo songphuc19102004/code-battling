@@ -22,6 +22,8 @@ type Store struct {
 
 	// Questions set
 	questions map[int]*Question
+
+	// Languages data and mutex
 }
 
 // NewStore creates a new store instance with initialized data
@@ -347,4 +349,5 @@ func (s *Store) initInMemoryData() {
 		4: {ID: 4, Title: "Best time to buy and sell stock", Description: "Buy at the lowest price and sell at the highest price"},
 		5: {ID: 5, Title: "Second largest element in an array", Description: "Second largest element in an array"},
 	}
+
 }

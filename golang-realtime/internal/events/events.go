@@ -23,9 +23,9 @@ type SseEvent struct {
 }
 
 type SolutionSubmitted struct {
-	PlayerId      int
-	RoomId        int
-	QuestionId    int
+	PlayerId      int32
+	RoomId        int32
+	QuestionId    int32
 	Code          string
 	Language      string
 	SubmittedTime time.Time
@@ -42,15 +42,15 @@ type LeaderboardUpdated struct {
 }
 
 type PlayerJoined struct {
-	PlayerID int
-	RoomID   int
+	PlayerID int32
+	RoomID   int32
 }
 
 type PlayerLeft struct {
-	PlayerId int
-	RoomId   int
+	PlayerId int32
+	RoomId   int32
 }
 
 type RoomDeleted struct {
-	RoomId int
+	RoomId int32
 }

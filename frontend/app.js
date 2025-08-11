@@ -63,6 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
    * Fetches available rooms from the backend and populates the dropdown.
    */
   async function fetchRooms() {
+    console.log("hit fetchrooms()");
     try {
       const response = await fetch(`${apiBaseUrl}/rooms`);
       if (!response.ok) {
@@ -80,6 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
         option.value = room.id;
         option.textContent = room.name;
         roomsDropdown.appendChild(option);
+        console.log(room);
       }
     } catch (error) {
       console.error("Failed to fetch rooms:", error);

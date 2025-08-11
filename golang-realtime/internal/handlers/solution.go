@@ -9,11 +9,11 @@ import (
 )
 
 type SubmitSolutionRequest struct {
-	QuestionId  int       `json:"question_id"`
-	RoomId      int       `json:"room_id"`
+	QuestionId  int32     `json:"question_id"` // Changed to int32
+	RoomId      int32     `json:"room_id"`     // Changed to int32
 	Language    string    `json:"language"`
 	Code        string    `json:"code"`
-	PlayerId    int       `json:"player_id"`
+	PlayerId    int32     `json:"player_id"` // Changed to int32
 	SubmittedAt time.Time `json:"submitted_at"`
 }
 
@@ -26,7 +26,7 @@ func (hr *HandlerRepo) SubmitSolutionHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	roomManager = hr.gr.Rooms[req.RoomId]
+	roomManager = hr.gr.GetRoomById(req.RoomId) // Use GetRoomById method instead of direct access
 	if roomManager == nil {
 		http.Error(w, "Room not found", http.StatusNotFound)
 		return

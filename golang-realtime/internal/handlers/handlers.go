@@ -10,16 +10,16 @@ import (
 // This includes the application logger, services like the RoomManager,
 // and the centralized store for data access.
 type HandlerRepo struct {
-	logger *slog.Logger
-	gr     *channels.GlobalRooms
-	store  *store.Store
+	logger  *slog.Logger
+	gr      *channels.GlobalRooms
+	queries *store.Queries
 }
 
 // NewHandlerRepo creates a new HandlerRepo with the provided dependencies.
-func NewHandlerRepo(logger *slog.Logger, gr *channels.GlobalRooms, store *store.Store) *HandlerRepo {
+func NewHandlerRepo(logger *slog.Logger, gr *channels.GlobalRooms, queries *store.Queries) *HandlerRepo {
 	return &HandlerRepo{
-		logger: logger,
-		gr:     gr,
-		store:  store,
+		logger:  logger,
+		gr:      gr,
+		queries: queries,
 	}
 }

@@ -29,12 +29,12 @@ func (hr *HandlerRepo) EventHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// listen for incoming SseEvents
-	listen := make(chan events.SseEvent, 10) // Add buffer to prevent blocking
+	listen := make(chan events.SseEvent) // Add buffer to prevent blocking
 
 	// Properly lock when modifying listeners
 	roomManager.Mu.Lock()
 	if roomManager.Listerners == nil {
-		roomManager.Listerners = make(map[int]chan<- events.SseEvent)
+		roomManager.Listerners = make(map[int32]chan<- events.SseEvent)
 	}
 	roomManager.Listerners[playerId] = listen
 	roomManager.Mu.Unlock()
