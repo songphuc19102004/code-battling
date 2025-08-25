@@ -1,0 +1,32 @@
+#!/bin/bash
+# Script for running Golang server.
+#
+# Usage: ./scripts/server
+#
+
+# in db, we would want to run db migrations here.
+
+# building go server binary
+echo "Building Golang server..."
+sudo mkdir -p bin
+go build -o -bin/server ./cmd/main
+if [ $? -ne 0 ]; then
+    echo "Go build failed. Exiting."
+    exit 1
+fi
+echo "Golang server built successfully."
+
+# starting server
+for i in $(seq 1 10); do
+    echo "Starting server (Attempt $i of 10)..."
+    ./bin/server
+
+    # If the server exits with code 0, it was a clean shutdown.
+    if [ $? -eq 0 ]; then
+        echo "Server exited cleanly."
+        break
+    fi
+
+    echo "Server crashed. Restarting in 2 seconds..."
+    sleep 2s
+done

@@ -2,7 +2,6 @@ package channels
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"golang-realtime/internal/crunner"
 	"golang-realtime/internal/events"
@@ -19,20 +18,22 @@ import (
 // events is a single queue that received events from multiple sources and process it, then send to all listeners
 // listeners are all the clients connected to the room, represented by their client IDs
 type RoomManager struct {
-	RoomId     int32
-	Events     chan any
-	Listerners map[int32]chan<- events.SseEvent
-	crunner    crunner.CRunner
-	logger     *slog.Logger
-	queries    *store.Queries
-	Mu         sync.RWMutex
+	RoomId        int32
+	Events        chan any
+	Listerners    map[int32]chan<- events.SseEvent
+	crunner       crunner.CRunner
+	logger        *slog.Logger
+	queries       *store.Queries
+	Mu            sync.RWMutex // Protects Listerners map
+	leaderboardMu sync.Mutex   // Protects leaderboard calculation
 }
 
 // basically, GlobalRooms struct holds all the RoomManagers (channel) of each room
 type GlobalRooms struct {
 	Mu sync.RWMutex
 	// roomId -> roomManager
-	Rooms   map[int32]*RoomManager
+	Rooms map[int32]*RoomManager
+
 	crunner crunner.CRunner
 }
 
@@ -71,13 +72,14 @@ func (gr *GlobalRooms) CreateRoom(roomId int32, queries *store.Queries) *RoomMan
 
 func NewRoomManager(roomId int32, queries *store.Queries, crunner crunner.CRunner) *RoomManager {
 	return &RoomManager{
-		RoomId:     roomId,
-		Events:     make(chan any),
-		Listerners: make(map[int32]chan<- events.SseEvent),
-		logger:     slog.Default(),
-		queries:    queries,
-		Mu:         sync.RWMutex{},
-		crunner:    crunner,
+		RoomId:        roomId,
+		Events:        make(chan any, 10),
+		Listerners:    make(map[int32]chan<- events.SseEvent),
+		logger:        slog.Default(),
+		queries:       queries,
+		Mu:            sync.RWMutex{},
+		leaderboardMu: sync.Mutex{}, // Initialize the new mutex
+		crunner:       crunner,
 	}
 }
 
@@ -105,6 +107,10 @@ func (rm *RoomManager) Start() {
 		case events.RoomDeleted:
 			if err := rm.processRoomDeleted(e); err != nil {
 				rm.logger.Error("failed to process room deleted event", "error", err)
+			}
+		case events.CompilationTest:
+			if err := rm.processCompilationTest(e); err != nil {
+				rm.logger.Error("failed to process compilation test event", "error", err)
 			}
 		}
 	}
@@ -198,21 +204,40 @@ func (rm *RoomManager) dispatchEventToPlayer(e events.SseEvent, playerID int32) 
 func (rm *RoomManager) processSolutionSubmitted(event events.SolutionSubmitted) error {
 	rm.logger.Info("solution submitted", "event", event)
 
+	// test compilation
+	// compilationTest := events.CompilationTest{
+	// 	Code:     "foo",
+	// 	Language: store.Language{},
+	// }
+
+	// rm.Events <- compilationTest
+
+	result := events.SolutionResult{
+		SolutionSubmitted: event,
+		Correct:           true,
+		RunOutput: crunner.RunOutput{
+			Result: crunner.Success,
+		},
+	}
+
+	rm.Events <- result
+
 	// spin up container and run in the background
-	go func() {
-		runResult, err := rm.crunner.Run(rm.logger)
-		if err != nil {
-			rm.logger.Error("failed to run container", "error", err)
-			return
-		}
+	// go func() {
+	// 	i := crunner.RunInput{}
+	// 	o, err := rm.crunner.Run(i, rm.logger)
+	// 	if err != nil {
+	// 		rm.logger.Error("failed to run container", "error", err)
+	// 		return
+	// 	}
 
-		e := events.SolutionResult{
-			SolutionSubmitted: event,
-			RunResult:         runResult,
-		}
+	// 	e := events.SolutionResult{
+	// 		SolutionSubmitted: event,
+	// 		RunOutput:         o,
+	// 	}
 
-		rm.Events <- e
-	}()
+	// 	rm.Events <- e
+	// }()
 
 	return nil
 }
@@ -225,12 +250,12 @@ func (rm *RoomManager) processSolutionResult(e events.SolutionResult) error {
 	rm.logger.Info("processCorrectSoltuionResult() hit", "event", e)
 
 	// compiled failed
-	if e.RunResult.Result == crunner.Failure {
+	if e.RunOutput.Result == crunner.Failure {
 		rm.logger.Info("solution failed", "event", e)
-		e.RunResult.Log = "runtime error: index out of range"
+		e.RunOutput.Log = "runtime error: index out of range"
 		sseEvent := events.SseEvent{
 			EventType: events.WRONG_SOLUTION_SUBMITTED,
-			Data:      fmt.Sprintf("log:%v", e.RunResult.Log),
+			Data:      fmt.Sprintf("log:%v", e.RunOutput.Log),
 		}
 
 		go rm.dispatchEventToPlayer(sseEvent, e.SolutionSubmitted.PlayerId)
@@ -238,11 +263,19 @@ func (rm *RoomManager) processSolutionResult(e events.SolutionResult) error {
 		return nil
 	}
 
+	// true
+
 	rm.queries.AddRoomPlayerScore(ctx, store.AddRoomPlayerScoreParams{
 		RoomID:      e.SolutionSubmitted.RoomId,
 		PlayerID:    e.SolutionSubmitted.PlayerId,
 		ScoreTooAdd: pgtype.Int4{Int32: 50},
 	})
+
+	// Recalculate leaderboard after score update
+	if err := rm.calculateLeaderboard(ctx); err != nil {
+		rm.logger.Error("failed to calculate leaderboard after solution result", "error", err)
+		// non-fatal, but should be monitored
+	}
 
 	sseEvent := events.SseEvent{
 		EventType: events.CORRECT_SOLUTION_SUBMITTED,
@@ -290,11 +323,23 @@ func (rm *RoomManager) removePlayerFromRoom(ctx context.Context, roomID, playerI
 	})
 }
 
-// Helper method to calculate leaderboard (placeholder)
-func (rm *RoomManager) calculateLeaderboard(ctx context.Context, roomID int32) error {
-	// TODO: Implement leaderboard calculation logic
-	// For now, this is a placeholder
-	rm.logger.Info("Calculating leaderboard for room", "room_id", roomID)
+// calculateLeaderboard recalculates and updates player ranks in a single, atomic, and concurrency-safe operation.
+func (rm *RoomManager) calculateLeaderboard(ctx context.Context) error {
+	// Lock to prevent concurrent calculations for the same room, which could cause deadlocks or race conditions.
+	rm.leaderboardMu.Lock()
+	defer rm.leaderboardMu.Unlock()
+
+	rm.logger.Info("Starting leaderboard calculation for room", "room_id", rm.RoomId)
+
+	// Use the new, highly efficient single query to update all ranks.
+	// This avoids transactions in Go code and looping, pushing the logic to the database where it's most performant.
+	err := rm.queries.UpdateRoomPlayerRanks(ctx, rm.RoomId)
+	if err != nil {
+		rm.logger.Error("Failed to update player ranks via single query", "room_id", rm.RoomId, "error", err)
+		return err
+	}
+
+	rm.logger.Info("Finished calculating leaderboard for room", "room_id", rm.RoomId)
 	return nil
 }
 
@@ -304,7 +349,7 @@ func (rm *RoomManager) processPlayerJoined(event events.PlayerJoined) error {
 	ctx := context.Background()
 	player, err := rm.queries.GetPlayer(ctx, event.PlayerID)
 	if err != nil {
-		return errors.New("player not found")
+		return err
 	}
 
 	if !rm.playerInRoom(ctx, event.RoomID, event.PlayerID) {
@@ -313,11 +358,13 @@ func (rm *RoomManager) processPlayerJoined(event events.PlayerJoined) error {
 			rm.logger.Error("failed to add player to room", "error", err)
 			return err
 		}
+	}
 
-		err = rm.calculateLeaderboard(ctx, event.RoomID)
-		if err != nil {
-			rm.logger.Error("failed to calculate leaderboard", "error", err)
-		}
+	// Recalculate leaderboard after a player joins
+	err = rm.calculateLeaderboard(ctx)
+	if err != nil {
+		rm.logger.Error("failed to calculate leaderboard after player joined", "error", err)
+		// This is not fatal to the join operation, but should be monitored.
 	}
 
 	rm.logger.Info("player joined", "event", event)
@@ -335,9 +382,6 @@ func (rm *RoomManager) processPlayerJoined(event events.PlayerJoined) error {
 }
 
 func (rm *RoomManager) processPlayerLeft(event events.PlayerLeft) error {
-	rm.Mu.Lock()
-	defer rm.Mu.Unlock()
-
 	ctx := context.Background()
 
 	// Process the player left event
@@ -348,9 +392,10 @@ func (rm *RoomManager) processPlayerLeft(event events.PlayerLeft) error {
 		rm.logger.Error("failed to remove player from room", "error", err)
 	}
 
-	err = rm.calculateLeaderboard(ctx, event.RoomId)
+	// Recalculate leaderboard after a player leaves
+	err = rm.calculateLeaderboard(ctx)
 	if err != nil {
-		rm.logger.Error("failed to calculate leaderboard", "error", err)
+		rm.logger.Error("failed to calculate leaderboard after player left", "error", err)
 	}
 
 	sseEvent := events.SseEvent{
@@ -388,5 +433,26 @@ func (rm *RoomManager) processRoomDeleted(event events.RoomDeleted) error {
 
 	go rm.dispatchEvent(sseEvent)
 
+	return nil
+}
+
+func (rm *RoomManager) processCompilationTest(ct events.CompilationTest) error {
+	i := crunner.RunInput{
+		Code:     ct.Code,
+		Language: ct.Language,
+	}
+	o, err := rm.crunner.Run(i, rm.logger)
+	if err != nil {
+		return err
+	}
+
+	sse := events.SseEvent{
+		EventType: events.COMPILATION_TEST,
+		Data:      o,
+	}
+
+	go rm.dispatchEvent(sse)
+
+	// send to process result
 	return nil
 }

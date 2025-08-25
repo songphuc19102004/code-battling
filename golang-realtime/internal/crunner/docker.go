@@ -2,86 +2,42 @@ package crunner
 
 import (
 	"log/slog"
-
-	"github.com/docker/docker/client"
+	"os"
+	"path/filepath"
 )
 
 type DockerRunner struct {
-	cli *client.Client
+	logger *slog.Logger
 }
 
-func NewDockerRunner(cli *client.Client) *DockerRunner {
+func NewDockerRunner(logger *slog.Logger) *DockerRunner {
 	return &DockerRunner{
-		cli: cli,
+		logger: logger,
 	}
 }
 
-func (d *DockerRunner) Run(logger *slog.Logger) (RunResult, error) {
+// Run will create an isolate job and wait for the job to run
+func (d *DockerRunner) Run(i RunInput, logger *slog.Logger) (RunOutput, error) {
 	logger.Info("runContainer() hit")
+	var o RunOutput
 
-	// ctx := context.Background()
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	dir, err := os.MkdirTemp("", "example")
 	if err != nil {
-		return RunResult{}, err
+		d.logger.Error("error making dir", "err", err)
+		return o, err
 	}
-	defer cli.Close()
 
-	logger.Info("Spawning a job container")
-	// runSimpleJobContainer(ctx, cli)
+	defer os.RemoveAll(dir)
 
-	result := RunResult{
-		Result:   Failure,
-		ExitCode: 0,
+	file := filepath.Join(dir, "tmpfile")
+	if err := os.WriteFile(file, []byte("content"), 0666); err != nil {
+		d.logger.Error("error writing file",
+			"err", err,
+			"file", file,
+		)
+
+		return o, err
 	}
-	return result, nil
+
+	return o, nil
 }
-
-// func runSimpleJobContainer(ctx context.Context, cli *client.Client) {
-// 	imageName := "alpine:latest"
-// 	log.Printf("Pulling image: %s\n", imageName)
-
-// 	reader, err := cli.ImagePull(ctx, imageName, image.PullOptions{})
-// 	if err != nil {
-// 		panic(err)
-// 	}
-
-// 	io.Copy(os.Stdout, reader)
-// 	reader.Close()
-// 	log.Println("Creating job container...")
-
-// 	resp, err := cli.ContainerCreate(ctx, &container.Config{
-// 		Image: imageName,
-// 		Cmd:   []string{"echo", "Hello from the job container!"},
-// 		Tty:   false,
-// 	}, &container.HostConfig{
-// 		// IMPORTANT: Clean up the container after it exits
-// 		AutoRemove: true,
-// 	}, nil, nil, "") // Use an empty string for a random container name
-// 	if err != nil {
-// 		log.Printf("Failed to create container: %v", err)
-// 		return
-// 	}
-
-// 	if err := cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-// 		log.Printf("Failed to start container: %v", err)
-// 		return
-// 	}
-
-// 	log.Printf("Image pulled successfully")
-
-// 	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
-// 	select {
-// 	case err := <-errCh:
-// 		if err != nil {
-// 			panic(err)
-// 		}
-// 	case <-statusCh:
-// 	}
-
-// 	out, err := cli.ContainerLogs(ctx, resp.ID, container.LogsOptions{ShowStdout: true})
-// 	if err != nil {
-// 		panic(err)
-// 	}
-
-// 	stdcopy.StdCopy(os.Stdout, os.Stderr, out)
-// }

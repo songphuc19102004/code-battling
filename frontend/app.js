@@ -62,6 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
   /**
    * Fetches available rooms from the backend and populates the dropdown.
    */
+  // make sure to match cases, because Golang is like that
   async function fetchRooms() {
     console.log("hit fetchrooms()");
     try {

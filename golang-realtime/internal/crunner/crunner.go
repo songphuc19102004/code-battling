@@ -1,7 +1,9 @@
 // crunner means code runner, dummy
+// work with Isolate
 package crunner
 
 import (
+	"golang-realtime/internal/store"
 	"log/slog"
 
 	"github.com/docker/docker/client"
@@ -15,10 +17,15 @@ const (
 )
 
 type CRunner interface {
-	Run(logger *slog.Logger) (RunResult, error)
+	Run(i RunInput, logger *slog.Logger) (RunOutput, error)
 }
 
-type RunResult struct {
+type RunInput struct {
+	Code     string
+	Language store.Language
+}
+
+type RunOutput struct {
 	Result          Result
 	TotalTestCases  int
 	TestCasesPassed int

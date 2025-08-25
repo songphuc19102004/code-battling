@@ -1,4 +1,4 @@
--- -- Players
+-- Players
 -- name: CreatePlayer :one
 INSERT INTO players (id, name, password)
 VALUES ($1, $2, $3)
@@ -51,28 +51,28 @@ DELETE FROM rooms
 WHERE id = $1;
 
 
--- Programming Languages
--- name: CreateProgrammingLanguage :one
-INSERT INTO programming_languages (id, name)
-VALUES ($1, $2)
+-- Languages
+-- name: CreateLanguage :one
+INSERT INTO languages (id, name, compile_cmd, run_cmd, source_file, is_archived)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
--- name: GetProgrammingLanguage :one
-SELECT * FROM programming_languages
+-- name: GetLanguage :one
+SELECT * FROM languages
 WHERE id = $1;
 
--- name: ListProgrammingLanguages :many
-SELECT * FROM programming_languages
+-- name: ListLanguages :many
+SELECT * FROM languages
 ORDER BY id;
 
--- name: UpdateProgrammingLanguage :one
-UPDATE programming_languages
-SET name = $2
+-- name: UpdateLanguage :one
+UPDATE languages
+SET name = $2, compile_cmd = $3, run_cmd = $4, source_file = $5, is_archived = $6
 WHERE id = $1
 RETURNING *;
 
--- name: DeleteProgrammingLanguage :exec
-DELETE FROM programming_languages
+-- name: DeleteLanguage :exec
+DELETE FROM languages
 WHERE id = $1;
 
 
@@ -154,6 +154,12 @@ SET score = $3, place = $4
 WHERE room_id = $1 AND player_id = $2
 RETURNING *;
 
+-- name: GetRoomPlayers :many
+SELECT rp.*
+FROM room_players rp
+WHERE rp.room_id = $1
+ORDER BY rp.score DESC;
+
 -- name: AddRoomPlayerScore :one
 UPDATE room_players
 SET score = score + sqlc.arg(score_too_add)
@@ -170,3 +176,42 @@ FROM room_players rp
 JOIN players p ON rp.player_id = p.id
 WHERE rp.room_id = $1
 ORDER BY rp.place;
+
+-- name: UpdateRoomPlayerRanks :exec
+WITH ranked_players AS (
+  SELECT
+    player_id,
+    RANK() OVER (ORDER BY score DESC) as new_place
+  FROM room_players
+  WHERE room_id = $1
+)
+UPDATE room_players rp
+SET place = rp_ranked.new_place
+FROM ranked_players rp_ranked
+WHERE rp.room_id = $1 AND rp.player_id = rp_ranked.player_id;
+
+-- Submissions
+-- name: CreateSubmission :one
+INSERT INTO submissions (source_code, language_id, stdin, expected_output, stdout, status_id, created_at, finished_at, time, memory, stderr, token, number_of_runs, cpu_time_limit, cpu_extra_time, wall_time_limit, memory_limit, stack_limit, max_processes_and_or_threads, enable_per_process_and_thread_time_limit, enable_per_process_and_thread_memory_limit, max_file_size, compile_output, exit_code, exit_signal, message, wall_time, compiler_options, command_line_arguments, redirect_stderr_to_stdout, callback_url, additional_files, enable_network, started_at, queued_at, updated_at, queue_host, execution_host)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38)
+RETURNING *;
+
+-- name: GetSubmission :one
+SELECT * FROM submissions
+WHERE id = $1;
+
+-- name: ListSubmissions :many
+SELECT * FROM submissions
+ORDER BY id;
+
+-- name: UpdateSubmission :one
+UPDATE submissions
+SET source_code = $2, language_id = $3, stdin = $4, expected_output = $5, stdout = $6, status_id = $7, created_at = $8, finished_at = $9, time = $10, memory = $11, stderr = $12, token = $13, number_of_runs = $14, cpu_time_limit = $15, cpu_extra_time = $16, wall_time_limit = $17, memory_limit = $18, stack_limit = $19, max_processes_and_or_threads = $20, enable_per_process_and_thread_time_limit = $21, enable_per_process_and_thread_memory_limit = $22, max_file_size = $23, compile_output = $24, exit_code = $25, exit_signal = $26, message = $27, wall_time = $28, compiler_options = $29, command_line_arguments = $30, redirect_stderr_to_stdout = $31, callback_url = $32, additional_files = $33, enable_network = $34, started_at = $35, queued_at = $36, updated_at = $37, queue_host = $38, execution_host = $39
+WHERE id = $1
+RETURNING *;
+
+-- name: DeleteSubmission :exec
+DELETE FROM submissions
+WHERE id = $1;
+
+--name:

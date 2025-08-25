@@ -6,7 +6,6 @@ package store
 
 import (
 	"context"
-	"sync"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -23,10 +22,7 @@ func New(db DBTX) *Queries {
 }
 
 type Queries struct {
-	db           DBTX
-	playerMu     sync.Mutex
-	roomMu       sync.Mutex
-	roomPlayerMu sync.Mutex
+	db DBTX
 }
 
 func (q *Queries) WithTx(tx pgx.Tx) *Queries {

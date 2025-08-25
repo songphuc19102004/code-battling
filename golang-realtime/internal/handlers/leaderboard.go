@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"golang-realtime/pkg/common/response"
 	"log/slog"
 	"net/http"
@@ -31,7 +30,7 @@ func (hr *HandlerRepo) GetLeaderboardHandler(w http.ResponseWriter, r *http.Requ
 
 	// Use the new, safe store method to get the leaderboard.
 	// This prevents the nil pointer panic.
-	ctx := context.Background()
+	ctx := r.Context()
 	dbEntries, err := hr.queries.GetLeaderboardForRoom(ctx, int32(roomId))
 	if err != nil {
 		response.JSON(w, http.StatusNotFound, nil, true, err.Error())

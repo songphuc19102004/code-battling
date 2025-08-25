@@ -5,9 +5,8 @@ import (
 	"golang-realtime/internal/channels"
 	"golang-realtime/internal/crunner"
 	"golang-realtime/internal/handlers"
-	"golang-realtime/pkg/common/env"
-
 	"golang-realtime/internal/store"
+	"golang-realtime/pkg/common/env"
 	"log"
 	"log/slog"
 	"os"
@@ -34,7 +33,12 @@ type Config struct {
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
+		log.Printf("Error loading .env file: %v", err)
+	}
+
+	dburl := env.GetString("DATABASE_URL", "")
+	if dburl == "" {
+		log.Fatal("DATABASE_URL not found")
 	}
 
 	cfg := &Config{Port: 8080}
@@ -49,15 +53,14 @@ func main() {
 		panic("DATABASE_URL environment variable is not set")
 	}
 
-	db, err := database.New(connStr)
+	db, err := database.NewPool(connStr)
 	if err != nil {
 		panic(err)
 	}
 
 	queries := store.New(db)
 
-	dockerClient := crunner.NewDockerClient()
-	drunner := crunner.NewDockerRunner(dockerClient)
+	drunner := crunner.NewDockerRunner(logger)
 	gr := channels.NewGlobalRooms(queries, drunner)
 
 	handlerRepo := handlers.NewHandlerRepo(logger, gr, queries)

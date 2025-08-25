@@ -68,7 +68,7 @@ func (hr *HandlerRepo) EventHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			hr.logger.Info("Sending event to player", "player_id", playerId, "event", event, "room_id", roomId)
+			hr.logger.Info("Sending event to player's client", "player_id", playerId, "event", event, "room_id", roomId)
 			data, err := json.Marshal(event)
 			if err != nil {
 				hr.logger.Error("failed to marshal SSE event", "error", err, "player_id", playerId)

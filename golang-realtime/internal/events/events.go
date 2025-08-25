@@ -2,6 +2,7 @@ package events
 
 import (
 	"golang-realtime/internal/crunner"
+	"golang-realtime/internal/store"
 	"time"
 )
 
@@ -14,6 +15,7 @@ const (
 	PLAYER_JOINED              EventType = "PLAYER_JOINED"
 	PLAYER_LEFT                EventType = "PLAYER_LEFT"
 	ROOM_DELETED               EventType = "ROOM_DELETED"
+	COMPILATION_TEST           EventType = "COMPILATION_TEST"
 )
 
 // Event wrapper for the listener
@@ -34,7 +36,7 @@ type SolutionSubmitted struct {
 type SolutionResult struct {
 	SolutionSubmitted SolutionSubmitted
 	Correct           bool
-	RunResult         crunner.RunResult
+	RunOutput         crunner.RunOutput
 }
 
 type LeaderboardUpdated struct {
@@ -53,4 +55,9 @@ type PlayerLeft struct {
 
 type RoomDeleted struct {
 	RoomId int32
+}
+
+type CompilationTest struct {
+	Code     string
+	Language store.Language
 }

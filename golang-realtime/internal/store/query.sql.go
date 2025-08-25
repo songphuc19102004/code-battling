@@ -36,6 +36,43 @@ func (q *Queries) AddRoomPlayerScore(ctx context.Context, arg AddRoomPlayerScore
 	return i, err
 }
 
+const createLanguage = `-- name: CreateLanguage :one
+INSERT INTO languages (id, name, compile_cmd, run_cmd, source_file, is_archived)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, name, compile_cmd, run_cmd, source_file, is_archived
+`
+
+type CreateLanguageParams struct {
+	ID         int32
+	Name       pgtype.Text
+	CompileCmd pgtype.Text
+	RunCmd     pgtype.Text
+	SourceFile pgtype.Text
+	IsArchived pgtype.Bool
+}
+
+// Languages
+func (q *Queries) CreateLanguage(ctx context.Context, arg CreateLanguageParams) (Language, error) {
+	row := q.db.QueryRow(ctx, createLanguage,
+		arg.ID,
+		arg.Name,
+		arg.CompileCmd,
+		arg.RunCmd,
+		arg.SourceFile,
+		arg.IsArchived,
+	)
+	var i Language
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CompileCmd,
+		&i.RunCmd,
+		&i.SourceFile,
+		&i.IsArchived,
+	)
+	return i, err
+}
+
 const createPlayer = `-- name: CreatePlayer :one
 INSERT INTO players (id, name, password)
 VALUES ($1, $2, $3)
@@ -48,30 +85,11 @@ type CreatePlayerParams struct {
 	Password string
 }
 
-// -- Players
+// Players
 func (q *Queries) CreatePlayer(ctx context.Context, arg CreatePlayerParams) (Player, error) {
 	row := q.db.QueryRow(ctx, createPlayer, arg.ID, arg.Name, arg.Password)
 	var i Player
 	err := row.Scan(&i.ID, &i.Name, &i.Password)
-	return i, err
-}
-
-const createProgrammingLanguage = `-- name: CreateProgrammingLanguage :one
-INSERT INTO programming_languages (id, name)
-VALUES ($1, $2)
-RETURNING id, name
-`
-
-type CreateProgrammingLanguageParams struct {
-	ID   int32
-	Name string
-}
-
-// Programming Languages
-func (q *Queries) CreateProgrammingLanguage(ctx context.Context, arg CreateProgrammingLanguageParams) (ProgrammingLanguage, error) {
-	row := q.db.QueryRow(ctx, createProgrammingLanguage, arg.ID, arg.Name)
-	var i ProgrammingLanguage
-	err := row.Scan(&i.ID, &i.Name)
 	return i, err
 }
 
@@ -166,6 +184,140 @@ func (q *Queries) CreateRoomPlayer(ctx context.Context, arg CreateRoomPlayerPara
 	return i, err
 }
 
+const createSubmission = `-- name: CreateSubmission :one
+INSERT INTO submissions (source_code, language_id, stdin, expected_output, stdout, status_id, created_at, finished_at, time, memory, stderr, token, number_of_runs, cpu_time_limit, cpu_extra_time, wall_time_limit, memory_limit, stack_limit, max_processes_and_or_threads, enable_per_process_and_thread_time_limit, enable_per_process_and_thread_memory_limit, max_file_size, compile_output, exit_code, exit_signal, message, wall_time, compiler_options, command_line_arguments, redirect_stderr_to_stdout, callback_url, additional_files, enable_network, started_at, queued_at, updated_at, queue_host, execution_host)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38)
+RETURNING id, source_code, language_id, stdin, expected_output, stdout, status_id, created_at, finished_at, time, memory, stderr, token, number_of_runs, cpu_time_limit, cpu_extra_time, wall_time_limit, memory_limit, stack_limit, max_processes_and_or_threads, enable_per_process_and_thread_time_limit, enable_per_process_and_thread_memory_limit, max_file_size, compile_output, exit_code, exit_signal, message, wall_time, compiler_options, command_line_arguments, redirect_stderr_to_stdout, callback_url, additional_files, enable_network, started_at, queued_at, updated_at, queue_host, execution_host
+`
+
+type CreateSubmissionParams struct {
+	SourceCode                           pgtype.Text
+	LanguageID                           pgtype.Int4
+	Stdin                                pgtype.Text
+	ExpectedOutput                       pgtype.Text
+	Stdout                               pgtype.Text
+	StatusID                             pgtype.Int4
+	CreatedAt                            pgtype.Timestamp
+	FinishedAt                           pgtype.Timestamp
+	Time                                 pgtype.Numeric
+	Memory                               pgtype.Int4
+	Stderr                               pgtype.Text
+	Token                                pgtype.Text
+	NumberOfRuns                         pgtype.Int4
+	CpuTimeLimit                         pgtype.Numeric
+	CpuExtraTime                         pgtype.Numeric
+	WallTimeLimit                        pgtype.Numeric
+	MemoryLimit                          pgtype.Int4
+	StackLimit                           pgtype.Int4
+	MaxProcessesAndOrThreads             pgtype.Int4
+	EnablePerProcessAndThreadTimeLimit   pgtype.Bool
+	EnablePerProcessAndThreadMemoryLimit pgtype.Bool
+	MaxFileSize                          pgtype.Int4
+	CompileOutput                        pgtype.Text
+	ExitCode                             pgtype.Int4
+	ExitSignal                           pgtype.Int4
+	Message                              pgtype.Text
+	WallTime                             pgtype.Numeric
+	CompilerOptions                      pgtype.Text
+	CommandLineArguments                 pgtype.Text
+	RedirectStderrToStdout               pgtype.Bool
+	CallbackUrl                          pgtype.Text
+	AdditionalFiles                      []byte
+	EnableNetwork                        pgtype.Bool
+	StartedAt                            pgtype.Timestamp
+	QueuedAt                             pgtype.Timestamp
+	UpdatedAt                            pgtype.Timestamp
+	QueueHost                            pgtype.Text
+	ExecutionHost                        pgtype.Text
+}
+
+// Submissions
+func (q *Queries) CreateSubmission(ctx context.Context, arg CreateSubmissionParams) (Submission, error) {
+	row := q.db.QueryRow(ctx, createSubmission,
+		arg.SourceCode,
+		arg.LanguageID,
+		arg.Stdin,
+		arg.ExpectedOutput,
+		arg.Stdout,
+		arg.StatusID,
+		arg.CreatedAt,
+		arg.FinishedAt,
+		arg.Time,
+		arg.Memory,
+		arg.Stderr,
+		arg.Token,
+		arg.NumberOfRuns,
+		arg.CpuTimeLimit,
+		arg.CpuExtraTime,
+		arg.WallTimeLimit,
+		arg.MemoryLimit,
+		arg.StackLimit,
+		arg.MaxProcessesAndOrThreads,
+		arg.EnablePerProcessAndThreadTimeLimit,
+		arg.EnablePerProcessAndThreadMemoryLimit,
+		arg.MaxFileSize,
+		arg.CompileOutput,
+		arg.ExitCode,
+		arg.ExitSignal,
+		arg.Message,
+		arg.WallTime,
+		arg.CompilerOptions,
+		arg.CommandLineArguments,
+		arg.RedirectStderrToStdout,
+		arg.CallbackUrl,
+		arg.AdditionalFiles,
+		arg.EnableNetwork,
+		arg.StartedAt,
+		arg.QueuedAt,
+		arg.UpdatedAt,
+		arg.QueueHost,
+		arg.ExecutionHost,
+	)
+	var i Submission
+	err := row.Scan(
+		&i.ID,
+		&i.SourceCode,
+		&i.LanguageID,
+		&i.Stdin,
+		&i.ExpectedOutput,
+		&i.Stdout,
+		&i.StatusID,
+		&i.CreatedAt,
+		&i.FinishedAt,
+		&i.Time,
+		&i.Memory,
+		&i.Stderr,
+		&i.Token,
+		&i.NumberOfRuns,
+		&i.CpuTimeLimit,
+		&i.CpuExtraTime,
+		&i.WallTimeLimit,
+		&i.MemoryLimit,
+		&i.StackLimit,
+		&i.MaxProcessesAndOrThreads,
+		&i.EnablePerProcessAndThreadTimeLimit,
+		&i.EnablePerProcessAndThreadMemoryLimit,
+		&i.MaxFileSize,
+		&i.CompileOutput,
+		&i.ExitCode,
+		&i.ExitSignal,
+		&i.Message,
+		&i.WallTime,
+		&i.CompilerOptions,
+		&i.CommandLineArguments,
+		&i.RedirectStderrToStdout,
+		&i.CallbackUrl,
+		&i.AdditionalFiles,
+		&i.EnableNetwork,
+		&i.StartedAt,
+		&i.QueuedAt,
+		&i.UpdatedAt,
+		&i.QueueHost,
+		&i.ExecutionHost,
+	)
+	return i, err
+}
+
 const createTestCase = `-- name: CreateTestCase :one
 INSERT INTO test_cases (question_id, question_language_id, input, expected_output, time_constraint, space_constraint)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -204,6 +356,16 @@ func (q *Queries) CreateTestCase(ctx context.Context, arg CreateTestCaseParams) 
 	return i, err
 }
 
+const deleteLanguage = `-- name: DeleteLanguage :exec
+DELETE FROM languages
+WHERE id = $1
+`
+
+func (q *Queries) DeleteLanguage(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, deleteLanguage, id)
+	return err
+}
+
 const deletePlayer = `-- name: DeletePlayer :exec
 DELETE FROM players
 WHERE id = $1
@@ -211,16 +373,6 @@ WHERE id = $1
 
 func (q *Queries) DeletePlayer(ctx context.Context, id int32) error {
 	_, err := q.db.Exec(ctx, deletePlayer, id)
-	return err
-}
-
-const deleteProgrammingLanguage = `-- name: DeleteProgrammingLanguage :exec
-DELETE FROM programming_languages
-WHERE id = $1
-`
-
-func (q *Queries) DeleteProgrammingLanguage(ctx context.Context, id int32) error {
-	_, err := q.db.Exec(ctx, deleteProgrammingLanguage, id)
 	return err
 }
 
@@ -264,6 +416,16 @@ func (q *Queries) DeleteRoomPlayer(ctx context.Context, arg DeleteRoomPlayerPara
 	return err
 }
 
+const deleteSubmission = `-- name: DeleteSubmission :exec
+DELETE FROM submissions
+WHERE id = $1
+`
+
+func (q *Queries) DeleteSubmission(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, deleteSubmission, id)
+	return err
+}
+
 const deleteTestCase = `-- name: DeleteTestCase :exec
 DELETE FROM test_cases
 WHERE id = $1
@@ -272,6 +434,25 @@ WHERE id = $1
 func (q *Queries) DeleteTestCase(ctx context.Context, id int32) error {
 	_, err := q.db.Exec(ctx, deleteTestCase, id)
 	return err
+}
+
+const getLanguage = `-- name: GetLanguage :one
+SELECT id, name, compile_cmd, run_cmd, source_file, is_archived FROM languages
+WHERE id = $1
+`
+
+func (q *Queries) GetLanguage(ctx context.Context, id int32) (Language, error) {
+	row := q.db.QueryRow(ctx, getLanguage, id)
+	var i Language
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CompileCmd,
+		&i.RunCmd,
+		&i.SourceFile,
+		&i.IsArchived,
+	)
+	return i, err
 }
 
 const getLeaderboardForRoom = `-- name: GetLeaderboardForRoom :many
@@ -314,9 +495,6 @@ WHERE id = $1
 `
 
 func (q *Queries) GetPlayer(ctx context.Context, id int32) (Player, error) {
-	q.playerMu.Lock()
-	defer q.playerMu.Unlock()
-
 	row := q.db.QueryRow(ctx, getPlayer, id)
 	var i Player
 	err := row.Scan(&i.ID, &i.Name, &i.Password)
@@ -332,18 +510,6 @@ func (q *Queries) GetPlayerByName(ctx context.Context, name string) (Player, err
 	row := q.db.QueryRow(ctx, getPlayerByName, name)
 	var i Player
 	err := row.Scan(&i.ID, &i.Name, &i.Password)
-	return i, err
-}
-
-const getProgrammingLanguage = `-- name: GetProgrammingLanguage :one
-SELECT id, name FROM programming_languages
-WHERE id = $1
-`
-
-func (q *Queries) GetProgrammingLanguage(ctx context.Context, id int32) (ProgrammingLanguage, error) {
-	row := q.db.QueryRow(ctx, getProgrammingLanguage, id)
-	var i ProgrammingLanguage
-	err := row.Scan(&i.ID, &i.Name)
 	return i, err
 }
 
@@ -406,6 +572,90 @@ func (q *Queries) GetRoomPlayer(ctx context.Context, arg GetRoomPlayerParams) (R
 	return i, err
 }
 
+const getRoomPlayers = `-- name: GetRoomPlayers :many
+SELECT rp.room_id, rp.player_id, rp.score, rp.place
+FROM room_players rp
+WHERE rp.room_id = $1
+ORDER BY rp.score DESC
+`
+
+func (q *Queries) GetRoomPlayers(ctx context.Context, roomID int32) ([]RoomPlayer, error) {
+	rows, err := q.db.Query(ctx, getRoomPlayers, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RoomPlayer
+	for rows.Next() {
+		var i RoomPlayer
+		if err := rows.Scan(
+			&i.RoomID,
+			&i.PlayerID,
+			&i.Score,
+			&i.Place,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSubmission = `-- name: GetSubmission :one
+SELECT id, source_code, language_id, stdin, expected_output, stdout, status_id, created_at, finished_at, time, memory, stderr, token, number_of_runs, cpu_time_limit, cpu_extra_time, wall_time_limit, memory_limit, stack_limit, max_processes_and_or_threads, enable_per_process_and_thread_time_limit, enable_per_process_and_thread_memory_limit, max_file_size, compile_output, exit_code, exit_signal, message, wall_time, compiler_options, command_line_arguments, redirect_stderr_to_stdout, callback_url, additional_files, enable_network, started_at, queued_at, updated_at, queue_host, execution_host FROM submissions
+WHERE id = $1
+`
+
+func (q *Queries) GetSubmission(ctx context.Context, id int32) (Submission, error) {
+	row := q.db.QueryRow(ctx, getSubmission, id)
+	var i Submission
+	err := row.Scan(
+		&i.ID,
+		&i.SourceCode,
+		&i.LanguageID,
+		&i.Stdin,
+		&i.ExpectedOutput,
+		&i.Stdout,
+		&i.StatusID,
+		&i.CreatedAt,
+		&i.FinishedAt,
+		&i.Time,
+		&i.Memory,
+		&i.Stderr,
+		&i.Token,
+		&i.NumberOfRuns,
+		&i.CpuTimeLimit,
+		&i.CpuExtraTime,
+		&i.WallTimeLimit,
+		&i.MemoryLimit,
+		&i.StackLimit,
+		&i.MaxProcessesAndOrThreads,
+		&i.EnablePerProcessAndThreadTimeLimit,
+		&i.EnablePerProcessAndThreadMemoryLimit,
+		&i.MaxFileSize,
+		&i.CompileOutput,
+		&i.ExitCode,
+		&i.ExitSignal,
+		&i.Message,
+		&i.WallTime,
+		&i.CompilerOptions,
+		&i.CommandLineArguments,
+		&i.RedirectStderrToStdout,
+		&i.CallbackUrl,
+		&i.AdditionalFiles,
+		&i.EnableNetwork,
+		&i.StartedAt,
+		&i.QueuedAt,
+		&i.UpdatedAt,
+		&i.QueueHost,
+		&i.ExecutionHost,
+	)
+	return i, err
+}
+
 const getTestCase = `-- name: GetTestCase :one
 SELECT id, question_id, question_language_id, input, expected_output, time_constraint, space_constraint FROM test_cases
 WHERE id = $1
@@ -424,6 +674,38 @@ func (q *Queries) GetTestCase(ctx context.Context, id int32) (TestCase, error) {
 		&i.SpaceConstraint,
 	)
 	return i, err
+}
+
+const listLanguages = `-- name: ListLanguages :many
+SELECT id, name, compile_cmd, run_cmd, source_file, is_archived FROM languages
+ORDER BY id
+`
+
+func (q *Queries) ListLanguages(ctx context.Context) ([]Language, error) {
+	rows, err := q.db.Query(ctx, listLanguages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Language
+	for rows.Next() {
+		var i Language
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CompileCmd,
+			&i.RunCmd,
+			&i.SourceFile,
+			&i.IsArchived,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listPlayers = `-- name: ListPlayers :many
@@ -468,31 +750,6 @@ func (q *Queries) ListPlayersInRoom(ctx context.Context, roomID int32) ([]Player
 	for rows.Next() {
 		var i Player
 		if err := rows.Scan(&i.ID, &i.Name, &i.Password); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listProgrammingLanguages = `-- name: ListProgrammingLanguages :many
-SELECT id, name FROM programming_languages
-ORDER BY id
-`
-
-func (q *Queries) ListProgrammingLanguages(ctx context.Context) ([]ProgrammingLanguage, error) {
-	rows, err := q.db.Query(ctx, listProgrammingLanguages)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ProgrammingLanguage
-	for rows.Next() {
-		var i ProgrammingLanguage
-		if err := rows.Scan(&i.ID, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -595,6 +852,71 @@ func (q *Queries) ListRooms(ctx context.Context) ([]Room, error) {
 	return items, nil
 }
 
+const listSubmissions = `-- name: ListSubmissions :many
+SELECT id, source_code, language_id, stdin, expected_output, stdout, status_id, created_at, finished_at, time, memory, stderr, token, number_of_runs, cpu_time_limit, cpu_extra_time, wall_time_limit, memory_limit, stack_limit, max_processes_and_or_threads, enable_per_process_and_thread_time_limit, enable_per_process_and_thread_memory_limit, max_file_size, compile_output, exit_code, exit_signal, message, wall_time, compiler_options, command_line_arguments, redirect_stderr_to_stdout, callback_url, additional_files, enable_network, started_at, queued_at, updated_at, queue_host, execution_host FROM submissions
+ORDER BY id
+`
+
+func (q *Queries) ListSubmissions(ctx context.Context) ([]Submission, error) {
+	rows, err := q.db.Query(ctx, listSubmissions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Submission
+	for rows.Next() {
+		var i Submission
+		if err := rows.Scan(
+			&i.ID,
+			&i.SourceCode,
+			&i.LanguageID,
+			&i.Stdin,
+			&i.ExpectedOutput,
+			&i.Stdout,
+			&i.StatusID,
+			&i.CreatedAt,
+			&i.FinishedAt,
+			&i.Time,
+			&i.Memory,
+			&i.Stderr,
+			&i.Token,
+			&i.NumberOfRuns,
+			&i.CpuTimeLimit,
+			&i.CpuExtraTime,
+			&i.WallTimeLimit,
+			&i.MemoryLimit,
+			&i.StackLimit,
+			&i.MaxProcessesAndOrThreads,
+			&i.EnablePerProcessAndThreadTimeLimit,
+			&i.EnablePerProcessAndThreadMemoryLimit,
+			&i.MaxFileSize,
+			&i.CompileOutput,
+			&i.ExitCode,
+			&i.ExitSignal,
+			&i.Message,
+			&i.WallTime,
+			&i.CompilerOptions,
+			&i.CommandLineArguments,
+			&i.RedirectStderrToStdout,
+			&i.CallbackUrl,
+			&i.AdditionalFiles,
+			&i.EnableNetwork,
+			&i.StartedAt,
+			&i.QueuedAt,
+			&i.UpdatedAt,
+			&i.QueueHost,
+			&i.ExecutionHost,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTestCasesForQuestion = `-- name: ListTestCasesForQuestion :many
 SELECT id, question_id, question_language_id, input, expected_output, time_constraint, space_constraint FROM test_cases
 WHERE question_id = $1 AND question_language_id = $2
@@ -634,6 +956,43 @@ func (q *Queries) ListTestCasesForQuestion(ctx context.Context, arg ListTestCase
 	return items, nil
 }
 
+const updateLanguage = `-- name: UpdateLanguage :one
+UPDATE languages
+SET name = $2, compile_cmd = $3, run_cmd = $4, source_file = $5, is_archived = $6
+WHERE id = $1
+RETURNING id, name, compile_cmd, run_cmd, source_file, is_archived
+`
+
+type UpdateLanguageParams struct {
+	ID         int32
+	Name       pgtype.Text
+	CompileCmd pgtype.Text
+	RunCmd     pgtype.Text
+	SourceFile pgtype.Text
+	IsArchived pgtype.Bool
+}
+
+func (q *Queries) UpdateLanguage(ctx context.Context, arg UpdateLanguageParams) (Language, error) {
+	row := q.db.QueryRow(ctx, updateLanguage,
+		arg.ID,
+		arg.Name,
+		arg.CompileCmd,
+		arg.RunCmd,
+		arg.SourceFile,
+		arg.IsArchived,
+	)
+	var i Language
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CompileCmd,
+		&i.RunCmd,
+		&i.SourceFile,
+		&i.IsArchived,
+	)
+	return i, err
+}
+
 const updatePlayer = `-- name: UpdatePlayer :one
 UPDATE players
 SET name = $2, password = $3
@@ -651,25 +1010,6 @@ func (q *Queries) UpdatePlayer(ctx context.Context, arg UpdatePlayerParams) (Pla
 	row := q.db.QueryRow(ctx, updatePlayer, arg.ID, arg.Name, arg.Password)
 	var i Player
 	err := row.Scan(&i.ID, &i.Name, &i.Password)
-	return i, err
-}
-
-const updateProgrammingLanguage = `-- name: UpdateProgrammingLanguage :one
-UPDATE programming_languages
-SET name = $2
-WHERE id = $1
-RETURNING id, name
-`
-
-type UpdateProgrammingLanguageParams struct {
-	ID   int32
-	Name string
-}
-
-func (q *Queries) UpdateProgrammingLanguage(ctx context.Context, arg UpdateProgrammingLanguageParams) (ProgrammingLanguage, error) {
-	row := q.db.QueryRow(ctx, updateProgrammingLanguage, arg.ID, arg.Name)
-	var i ProgrammingLanguage
-	err := row.Scan(&i.ID, &i.Name)
 	return i, err
 }
 
@@ -733,6 +1073,25 @@ func (q *Queries) UpdateRoom(ctx context.Context, arg UpdateRoomParams) (Room, e
 	return i, err
 }
 
+const updateRoomPlayerRanks = `-- name: UpdateRoomPlayerRanks :exec
+WITH ranked_players AS (
+  SELECT
+    player_id,
+    RANK() OVER (ORDER BY score DESC) as new_place
+  FROM room_players
+  WHERE room_id = $1
+)
+UPDATE room_players rp
+SET place = rp_ranked.new_place
+FROM ranked_players rp_ranked
+WHERE rp.room_id = $1 AND rp.player_id = rp_ranked.player_id
+`
+
+func (q *Queries) UpdateRoomPlayerRanks(ctx context.Context, roomID int32) error {
+	_, err := q.db.Exec(ctx, updateRoomPlayerRanks, roomID)
+	return err
+}
+
 const updateRoomPlayerScore = `-- name: UpdateRoomPlayerScore :one
 UPDATE room_players
 SET score = $3, place = $4
@@ -760,6 +1119,142 @@ func (q *Queries) UpdateRoomPlayerScore(ctx context.Context, arg UpdateRoomPlaye
 		&i.PlayerID,
 		&i.Score,
 		&i.Place,
+	)
+	return i, err
+}
+
+const updateSubmission = `-- name: UpdateSubmission :one
+UPDATE submissions
+SET source_code = $2, language_id = $3, stdin = $4, expected_output = $5, stdout = $6, status_id = $7, created_at = $8, finished_at = $9, time = $10, memory = $11, stderr = $12, token = $13, number_of_runs = $14, cpu_time_limit = $15, cpu_extra_time = $16, wall_time_limit = $17, memory_limit = $18, stack_limit = $19, max_processes_and_or_threads = $20, enable_per_process_and_thread_time_limit = $21, enable_per_process_and_thread_memory_limit = $22, max_file_size = $23, compile_output = $24, exit_code = $25, exit_signal = $26, message = $27, wall_time = $28, compiler_options = $29, command_line_arguments = $30, redirect_stderr_to_stdout = $31, callback_url = $32, additional_files = $33, enable_network = $34, started_at = $35, queued_at = $36, updated_at = $37, queue_host = $38, execution_host = $39
+WHERE id = $1
+RETURNING id, source_code, language_id, stdin, expected_output, stdout, status_id, created_at, finished_at, time, memory, stderr, token, number_of_runs, cpu_time_limit, cpu_extra_time, wall_time_limit, memory_limit, stack_limit, max_processes_and_or_threads, enable_per_process_and_thread_time_limit, enable_per_process_and_thread_memory_limit, max_file_size, compile_output, exit_code, exit_signal, message, wall_time, compiler_options, command_line_arguments, redirect_stderr_to_stdout, callback_url, additional_files, enable_network, started_at, queued_at, updated_at, queue_host, execution_host
+`
+
+type UpdateSubmissionParams struct {
+	ID                                   int32
+	SourceCode                           pgtype.Text
+	LanguageID                           pgtype.Int4
+	Stdin                                pgtype.Text
+	ExpectedOutput                       pgtype.Text
+	Stdout                               pgtype.Text
+	StatusID                             pgtype.Int4
+	CreatedAt                            pgtype.Timestamp
+	FinishedAt                           pgtype.Timestamp
+	Time                                 pgtype.Numeric
+	Memory                               pgtype.Int4
+	Stderr                               pgtype.Text
+	Token                                pgtype.Text
+	NumberOfRuns                         pgtype.Int4
+	CpuTimeLimit                         pgtype.Numeric
+	CpuExtraTime                         pgtype.Numeric
+	WallTimeLimit                        pgtype.Numeric
+	MemoryLimit                          pgtype.Int4
+	StackLimit                           pgtype.Int4
+	MaxProcessesAndOrThreads             pgtype.Int4
+	EnablePerProcessAndThreadTimeLimit   pgtype.Bool
+	EnablePerProcessAndThreadMemoryLimit pgtype.Bool
+	MaxFileSize                          pgtype.Int4
+	CompileOutput                        pgtype.Text
+	ExitCode                             pgtype.Int4
+	ExitSignal                           pgtype.Int4
+	Message                              pgtype.Text
+	WallTime                             pgtype.Numeric
+	CompilerOptions                      pgtype.Text
+	CommandLineArguments                 pgtype.Text
+	RedirectStderrToStdout               pgtype.Bool
+	CallbackUrl                          pgtype.Text
+	AdditionalFiles                      []byte
+	EnableNetwork                        pgtype.Bool
+	StartedAt                            pgtype.Timestamp
+	QueuedAt                             pgtype.Timestamp
+	UpdatedAt                            pgtype.Timestamp
+	QueueHost                            pgtype.Text
+	ExecutionHost                        pgtype.Text
+}
+
+func (q *Queries) UpdateSubmission(ctx context.Context, arg UpdateSubmissionParams) (Submission, error) {
+	row := q.db.QueryRow(ctx, updateSubmission,
+		arg.ID,
+		arg.SourceCode,
+		arg.LanguageID,
+		arg.Stdin,
+		arg.ExpectedOutput,
+		arg.Stdout,
+		arg.StatusID,
+		arg.CreatedAt,
+		arg.FinishedAt,
+		arg.Time,
+		arg.Memory,
+		arg.Stderr,
+		arg.Token,
+		arg.NumberOfRuns,
+		arg.CpuTimeLimit,
+		arg.CpuExtraTime,
+		arg.WallTimeLimit,
+		arg.MemoryLimit,
+		arg.StackLimit,
+		arg.MaxProcessesAndOrThreads,
+		arg.EnablePerProcessAndThreadTimeLimit,
+		arg.EnablePerProcessAndThreadMemoryLimit,
+		arg.MaxFileSize,
+		arg.CompileOutput,
+		arg.ExitCode,
+		arg.ExitSignal,
+		arg.Message,
+		arg.WallTime,
+		arg.CompilerOptions,
+		arg.CommandLineArguments,
+		arg.RedirectStderrToStdout,
+		arg.CallbackUrl,
+		arg.AdditionalFiles,
+		arg.EnableNetwork,
+		arg.StartedAt,
+		arg.QueuedAt,
+		arg.UpdatedAt,
+		arg.QueueHost,
+		arg.ExecutionHost,
+	)
+	var i Submission
+	err := row.Scan(
+		&i.ID,
+		&i.SourceCode,
+		&i.LanguageID,
+		&i.Stdin,
+		&i.ExpectedOutput,
+		&i.Stdout,
+		&i.StatusID,
+		&i.CreatedAt,
+		&i.FinishedAt,
+		&i.Time,
+		&i.Memory,
+		&i.Stderr,
+		&i.Token,
+		&i.NumberOfRuns,
+		&i.CpuTimeLimit,
+		&i.CpuExtraTime,
+		&i.WallTimeLimit,
+		&i.MemoryLimit,
+		&i.StackLimit,
+		&i.MaxProcessesAndOrThreads,
+		&i.EnablePerProcessAndThreadTimeLimit,
+		&i.EnablePerProcessAndThreadMemoryLimit,
+		&i.MaxFileSize,
+		&i.CompileOutput,
+		&i.ExitCode,
+		&i.ExitSignal,
+		&i.Message,
+		&i.WallTime,
+		&i.CompilerOptions,
+		&i.CommandLineArguments,
+		&i.RedirectStderrToStdout,
+		&i.CallbackUrl,
+		&i.AdditionalFiles,
+		&i.EnableNetwork,
+		&i.StartedAt,
+		&i.QueuedAt,
+		&i.UpdatedAt,
+		&i.QueueHost,
+		&i.ExecutionHost,
 	)
 	return i, err
 }
