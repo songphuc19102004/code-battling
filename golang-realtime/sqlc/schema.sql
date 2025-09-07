@@ -32,6 +32,7 @@ CREATE TABLE public.room_players (
   player_id integer NOT NULL,
   score integer DEFAULT 0,
   place integer,
+  state text DEFAULT NULL,
   CONSTRAINT room_players_pkey PRIMARY KEY (room_id, player_id),
   CONSTRAINT room_players_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(id),
   CONSTRAINT room_players_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.rooms(id)

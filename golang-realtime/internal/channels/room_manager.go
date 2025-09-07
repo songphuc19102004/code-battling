@@ -298,15 +298,16 @@ func (rm *RoomManager) playerInRoom(ctx context.Context, roomID, playerID int32)
 
 // Helper method to add player to room
 func (rm *RoomManager) addPlayerToRoom(ctx context.Context, roomID, playerID int32) error {
+	// place := rm.queries.room
 	createParams := store.CreateRoomPlayerParams{
 		RoomID:   roomID,
 		PlayerID: playerID,
 		Score: pgtype.Int4{
-			Int32: 0,
+			Int32: 12,
 			Valid: true,
 		},
 		Place: pgtype.Int4{
-			Int32: 0,
+			Int32: 10,
 			Valid: true,
 		},
 	}
@@ -353,6 +354,9 @@ func (rm *RoomManager) processPlayerJoined(event events.PlayerJoined) error {
 	}
 
 	if !rm.playerInRoom(ctx, event.RoomID, event.PlayerID) {
+		rm.logger.Info("player is not in room, adding to room...",
+			"player", player,
+			"room", event.RoomID)
 		err := rm.addPlayerToRoom(ctx, event.RoomID, player.ID)
 		if err != nil {
 			rm.logger.Error("failed to add player to room", "error", err)
@@ -441,7 +445,7 @@ func (rm *RoomManager) processCompilationTest(ct events.CompilationTest) error {
 		Code:     ct.Code,
 		Language: ct.Language,
 	}
-	o, err := rm.crunner.Run(i, rm.logger)
+	o, err := rm.crunner.Execute(i, rm.logger)
 	if err != nil {
 		return err
 	}

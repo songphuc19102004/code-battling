@@ -1,12 +1,9 @@
 // crunner means code runner, dummy
-// work with Isolate
 package crunner
 
 import (
 	"golang-realtime/internal/store"
 	"log/slog"
-
-	"github.com/docker/docker/client"
 )
 
 type Result string
@@ -17,7 +14,14 @@ const (
 )
 
 type CRunner interface {
-	Run(i RunInput, logger *slog.Logger) (RunOutput, error)
+	Execute(i RunInput, logger *slog.Logger) (RunOutput, error)
+}
+
+type RunnerManagerOptions struct {
+	MaxWorkers   int
+	MemoryLimit  int
+	MaxJobCount  int
+	CpuNanoLimit int64
 }
 
 type RunInput struct {
@@ -32,12 +36,4 @@ type RunOutput struct {
 	FailedTestCase  any
 	Log             string
 	ExitCode        int
-}
-
-func NewDockerClient() *client.Client {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		panic(err)
-	}
-	return cli
 }
