@@ -8,6 +8,7 @@ import (
 	"golang-realtime/internal/store"
 	"log/slog"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 )
@@ -40,20 +41,29 @@ type WorkerPool struct {
 }
 
 type WorkerPoolOptions struct {
-	MaxWorkers   int
-	MemoryLimit  int
-	MaxJobCount  int
-	CpuNanoLimit int64
+	MaxWorkers       int
+	MemoryLimitBytes int64
+	MaxJobCount      int
+	CpuNanoLimit     int64
 }
 
 func NewWorkerPool(logger *slog.Logger, queries *store.Queries, opts *WorkerPoolOptions) (*WorkerPool, error) {
-	cm, err := NewDockerContainerManager()
+	cm, err := NewDockerContainerManager(opts.MaxWorkers, opts.MemoryLimitBytes, opts.CpuNanoLimit)
 	if err != nil {
 		return nil, err
 	}
+
+	err = cm.InitializePool()
+	if err != nil {
+		return nil, err
+	}
+
 	w := &WorkerPool{
-		cm:      cm,
-		queries: queries,
+		cm:           cm,
+		queries:      queries,
+		logger:       logger,
+		jobs:         make(chan Job, opts.MaxJobCount),
+		shutdownChan: make(chan any),
 	}
 
 	for i := range opts.MaxWorkers {
@@ -131,6 +141,7 @@ func (w *WorkerPool) executeJob(workerID int, job Job) error {
 			"lang", job.Language,
 			"err", err)
 	} else {
+		err = w.cm.SetContainerState(containerID, StateIdle)
 		w.logger.Info("Worker job completed",
 			"worker_id", workerID,
 			"container_id", containerID,
@@ -164,7 +175,8 @@ func (w *WorkerPool) executeCode(containerID, code, lang string) (string, bool, 
 	}
 
 	var output bytes.Buffer
-	cmd := exec.CommandContext(ctx, "docker", append([]string{"exec", containerID}, langCfg.RunCmd.String)...)
+	runCmdArgs := generateCodeRunCmd(containerID, langCfg.RunCmd.String, code)
+	cmd := exec.CommandContext(ctx, "docker", append([]string{"exec", containerID, "sh", "-c"}, runCmdArgs...)...)
 	cmd.Stdout = &output
 	cmd.Stderr = &output
 
@@ -184,4 +196,12 @@ func (w *WorkerPool) executeCode(containerID, code, lang string) (string, bool, 
 		"duration", duration)
 
 	return output.String(), true, nil
+}
+
+// GenerateCodeRunCmd will generate a command that combine Run Command and Code
+func generateCodeRunCmd(containerID, runCmd, code string) []string {
+	formattedCode := strings.ReplaceAll(code, "'", "'\\''")
+	runCmd = fmt.Sprintf(runCmd, formattedCode)
+	cmd := append([]string{"exec", containerID, "sh", "-c"}, runCmd)
+	return cmd
 }

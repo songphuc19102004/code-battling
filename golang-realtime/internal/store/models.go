@@ -9,91 +9,91 @@ import (
 )
 
 type Language struct {
-	ID            int32
-	Name          string
-	CompileCmd    pgtype.Text
-	RunCmd        pgtype.Text
-	TimeoutSecond pgtype.Float8
+	ID            int32         `json:"id"`
+	Name          string        `json:"name"`
+	CompileCmd    pgtype.Text   `json:"compile_cmd"`
+	RunCmd        pgtype.Text   `json:"run_cmd"`
+	TimeoutSecond pgtype.Float8 `json:"timeout_second"`
 }
 
 type Player struct {
-	ID       int32
-	Name     string
-	Password string
+	ID       int32  `json:"id"`
+	Name     string `json:"name"`
+	Password string `json:"password"`
 }
 
 type Question struct {
-	ID               int32
-	LanguageID       int32
-	TemplateFunction pgtype.Text
-	Title            string
-	Description      pgtype.Text
-	Score            int32
-	Difficulty       int32
+	ID               int32       `json:"id"`
+	LanguageID       int32       `json:"language_id"`
+	TemplateFunction pgtype.Text `json:"template_function"`
+	Title            string      `json:"title"`
+	Description      pgtype.Text `json:"description"`
+	Score            int32       `json:"score"`
+	Difficulty       int32       `json:"difficulty"`
 }
 
 type Room struct {
-	ID          int32
-	Name        string
-	Description pgtype.Text
+	ID          int32       `json:"id"`
+	Name        string      `json:"name"`
+	Description pgtype.Text `json:"description"`
 }
 
 type RoomPlayer struct {
-	RoomID   int32
-	PlayerID int32
-	Score    pgtype.Int4
-	Place    pgtype.Int4
-	State    pgtype.Text
+	RoomID   int32       `json:"room_id"`
+	PlayerID int32       `json:"player_id"`
+	Score    pgtype.Int4 `json:"score"`
+	Place    pgtype.Int4 `json:"place"`
+	State    pgtype.Text `json:"state"`
 }
 
 type Submission struct {
-	ID                                   int32
-	SourceCode                           pgtype.Text
-	LanguageID                           pgtype.Int4
-	Stdin                                pgtype.Text
-	ExpectedOutput                       pgtype.Text
-	Stdout                               pgtype.Text
-	StatusID                             pgtype.Int4
-	CreatedAt                            pgtype.Timestamp
-	FinishedAt                           pgtype.Timestamp
-	Time                                 pgtype.Numeric
-	Memory                               pgtype.Int4
-	Stderr                               pgtype.Text
-	Token                                pgtype.Text
-	NumberOfRuns                         pgtype.Int4
-	CpuTimeLimit                         pgtype.Numeric
-	CpuExtraTime                         pgtype.Numeric
-	WallTimeLimit                        pgtype.Numeric
-	MemoryLimit                          pgtype.Int4
-	StackLimit                           pgtype.Int4
-	MaxProcessesAndOrThreads             pgtype.Int4
-	EnablePerProcessAndThreadTimeLimit   pgtype.Bool
-	EnablePerProcessAndThreadMemoryLimit pgtype.Bool
-	MaxFileSize                          pgtype.Int4
-	CompileOutput                        pgtype.Text
-	ExitCode                             pgtype.Int4
-	ExitSignal                           pgtype.Int4
-	Message                              pgtype.Text
-	WallTime                             pgtype.Numeric
-	CompilerOptions                      pgtype.Text
-	CommandLineArguments                 pgtype.Text
-	RedirectStderrToStdout               pgtype.Bool
-	CallbackUrl                          pgtype.Text
-	AdditionalFiles                      []byte
-	EnableNetwork                        pgtype.Bool
-	StartedAt                            pgtype.Timestamp
-	QueuedAt                             pgtype.Timestamp
-	UpdatedAt                            pgtype.Timestamp
-	QueueHost                            pgtype.Text
-	ExecutionHost                        pgtype.Text
+	ID                                   int32            `json:"id"`
+	SourceCode                           pgtype.Text      `json:"source_code"`
+	LanguageID                           pgtype.Int4      `json:"language_id"`
+	Stdin                                pgtype.Text      `json:"stdin"`
+	ExpectedOutput                       pgtype.Text      `json:"expected_output"`
+	Stdout                               pgtype.Text      `json:"stdout"`
+	StatusID                             pgtype.Int4      `json:"status_id"`
+	CreatedAt                            pgtype.Timestamp `json:"created_at"`
+	FinishedAt                           pgtype.Timestamp `json:"finished_at"`
+	Time                                 pgtype.Numeric   `json:"time"`
+	Memory                               pgtype.Int4      `json:"memory"`
+	Stderr                               pgtype.Text      `json:"stderr"`
+	Token                                pgtype.Text      `json:"token"`
+	NumberOfRuns                         pgtype.Int4      `json:"number_of_runs"`
+	CpuTimeLimit                         pgtype.Numeric   `json:"cpu_time_limit"`
+	CpuExtraTime                         pgtype.Numeric   `json:"cpu_extra_time"`
+	WallTimeLimit                        pgtype.Numeric   `json:"wall_time_limit"`
+	MemoryLimit                          pgtype.Int4      `json:"memory_limit"`
+	StackLimit                           pgtype.Int4      `json:"stack_limit"`
+	MaxProcessesAndOrThreads             pgtype.Int4      `json:"max_processes_and_or_threads"`
+	EnablePerProcessAndThreadTimeLimit   pgtype.Bool      `json:"enable_per_process_and_thread_time_limit"`
+	EnablePerProcessAndThreadMemoryLimit pgtype.Bool      `json:"enable_per_process_and_thread_memory_limit"`
+	MaxFileSize                          pgtype.Int4      `json:"max_file_size"`
+	CompileOutput                        pgtype.Text      `json:"compile_output"`
+	ExitCode                             pgtype.Int4      `json:"exit_code"`
+	ExitSignal                           pgtype.Int4      `json:"exit_signal"`
+	Message                              pgtype.Text      `json:"message"`
+	WallTime                             pgtype.Numeric   `json:"wall_time"`
+	CompilerOptions                      pgtype.Text      `json:"compiler_options"`
+	CommandLineArguments                 pgtype.Text      `json:"command_line_arguments"`
+	RedirectStderrToStdout               pgtype.Bool      `json:"redirect_stderr_to_stdout"`
+	CallbackUrl                          pgtype.Text      `json:"callback_url"`
+	AdditionalFiles                      []byte           `json:"additional_files"`
+	EnableNetwork                        pgtype.Bool      `json:"enable_network"`
+	StartedAt                            pgtype.Timestamp `json:"started_at"`
+	QueuedAt                             pgtype.Timestamp `json:"queued_at"`
+	UpdatedAt                            pgtype.Timestamp `json:"updated_at"`
+	QueueHost                            pgtype.Text      `json:"queue_host"`
+	ExecutionHost                        pgtype.Text      `json:"execution_host"`
 }
 
 type TestCase struct {
-	ID                 int32
-	QuestionID         int32
-	QuestionLanguageID int32
-	Input              string
-	ExpectedOutput     string
-	TimeConstraint     pgtype.Float8
-	SpaceConstraint    pgtype.Int4
+	ID                 int32         `json:"id"`
+	QuestionID         int32         `json:"question_id"`
+	QuestionLanguageID int32         `json:"question_language_id"`
+	Input              string        `json:"input"`
+	ExpectedOutput     string        `json:"expected_output"`
+	TimeConstraint     pgtype.Float8 `json:"time_constraint"`
+	SpaceConstraint    pgtype.Int4   `json:"space_constraint"`
 }

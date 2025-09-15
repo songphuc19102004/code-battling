@@ -43,11 +43,6 @@ func main() {
 
 	cfg := &Config{Port: 8080}
 
-	// log to os standard output
-	slogHandler := tint.NewHandler(os.Stdout, &tint.Options{Level: slog.LevelDebug, AddSource: true})
-	logger := slog.New(slogHandler)
-	slog.SetDefault(logger) // Set default for any library using slog's default logger
-
 	// test area
 	connStr := env.GetString("DATABASE_URL", "")
 	if connStr == "" {
@@ -61,11 +56,16 @@ func main() {
 
 	queries := store.New(db)
 
+	// log to os standard output
+	slogHandler := tint.NewHandler(os.Stdout, &tint.Options{Level: slog.LevelDebug, AddSource: true})
+	logger := slog.New(slogHandler)
+	slog.SetDefault(logger) // Set default for any library using slog's default logger
+
 	worker, err := executor.NewWorkerPool(logger, queries, &executor.WorkerPoolOptions{
-		MaxWorkers:   5,
-		MemoryLimit:  600,
-		MaxJobCount:  3,
-		CpuNanoLimit: 1000,
+		MaxWorkers:       5,
+		MemoryLimitBytes: 6,
+		MaxJobCount:      3,
+		CpuNanoLimit:     1000,
 	})
 	if err != nil {
 		panic(err)

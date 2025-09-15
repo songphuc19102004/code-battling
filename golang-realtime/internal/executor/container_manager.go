@@ -36,13 +36,13 @@ type ContainerInfo struct {
 }
 
 type DockerContainerManager struct {
-	mu            sync.Mutex
-	logger        *slog.Logger // this logger both writes to terminal and to log file
-	cli           *client.Client
-	containers    map[string]*ContainerInfo
-	maxWorkers    int
-	memoryLimitMB int64
-	cpunanoLimit  int64
+	mu               sync.Mutex
+	logger           *slog.Logger // this logger both writes to terminal and to log file
+	cli              *client.Client
+	containers       map[string]*ContainerInfo
+	maxWorkers       int
+	memoryLimitBytes int64
+	cpunanoLimit     int64
 }
 
 func NewDockerClient() (*client.Client, error) {
@@ -53,7 +53,7 @@ func NewDockerClient() (*client.Client, error) {
 	return cli, nil
 }
 
-func NewDockerContainerManager() (*DockerContainerManager, error) {
+func NewDockerContainerManager(maxWorkers int, memoryLimitBytes, cpunanoLimit int64) (*DockerContainerManager, error) {
 	dockerClient, err := NewDockerClient()
 	if err != nil {
 		return nil, err
@@ -71,12 +71,16 @@ func NewDockerContainerManager() (*DockerContainerManager, error) {
 	slogHandler := tint.NewHandler(multiWriter, &tint.Options{Level: slog.LevelDebug, AddSource: true})
 	logger := slog.New(slogHandler)
 	return &DockerContainerManager{
-		logger: logger,
-		cli:    dockerClient,
+		logger:           logger,
+		cli:              dockerClient,
+		containers:       make(map[string]*ContainerInfo),
+		maxWorkers:       maxWorkers,
+		cpunanoLimit:     cpunanoLimit,
+		memoryLimitBytes: memoryLimitBytes,
 	}, nil
 }
 
-func (d *DockerContainerManager) InitiazlizePool() error {
+func (d *DockerContainerManager) InitializePool() error {
 	ctx := context.Background()
 	containers, err := d.cli.ContainerList(ctx, container.ListOptions{All: true})
 	if err != nil {
@@ -128,7 +132,7 @@ func (d *DockerContainerManager) StartContainer() error {
 
 	hostCfg := &container.HostConfig{
 		Resources: container.Resources{
-			Memory:   d.memoryLimitMB * MB,
+			Memory:   d.memoryLimitBytes * MB,
 			NanoCPUs: d.cpunanoLimit * 1000_000,
 		},
 		NetworkMode: "none",
@@ -184,7 +188,7 @@ func (d *DockerContainerManager) removeExcessContainer(amount int) error {
 	return nil
 }
 
-// RemoveContainer safelys remove a Container
+// RemoveContainer safely remove a Container
 func (d *DockerContainerManager) RemoveContainer(id string) error {
 	ctx := context.Background()
 

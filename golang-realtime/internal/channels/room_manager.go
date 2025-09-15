@@ -225,12 +225,12 @@ func (rm *RoomManager) processSolutionResult(e events.SolutionResult) error {
 	// compiled failed
 	if !e.Result.Sucess {
 		rm.logger.Info("solution failed", "event", e)
-		e.Result.Output = "runtime error: index out of range"
 		sseEvent := events.SseEvent{
 			EventType: events.WRONG_SOLUTION_SUBMITTED,
 			Data:      fmt.Sprintf("log:%v", e.Result.Output),
 		}
 
+		// send compilation error to the player
 		go rm.dispatchEventToPlayer(sseEvent, e.SolutionSubmitted.PlayerId)
 
 		return nil
@@ -253,6 +253,7 @@ func (rm *RoomManager) processSolutionResult(e events.SolutionResult) error {
 		Data:      "",
 	}
 
+	// send event to the whole room
 	go rm.dispatchEvent(sseEvent)
 
 	return nil

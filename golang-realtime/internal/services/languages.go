@@ -11,31 +11,31 @@ func NormalizeLanguage(lang string) string {
 
 	languageMap := map[string]string{
 
-		"js":          "js",
-		"jscript":     "js",
-		"javscript":   "js",
-		"javsscript":  "js",
-		"javascipt":   "js",
-		"javasript":   "js",
-		"javascript":  "js",
-		"java script": "js",
-		"jscipt":      "js",
+		"js":          "Javascript",
+		"jscript":     "Javascript",
+		"javscript":   "Javascript",
+		"javsscript":  "Javascript",
+		"javascipt":   "Javascript",
+		"javasript":   "Javascript",
+		"javascript":  "Javascript",
+		"java script": "Javascript",
+		"jscipt":      "Javascript",
 
-		"python":  "python",
-		"pyt":     "python",
-		"pyn":     "python",
-		"pythn":   "python",
-		"phyton":  "python",
-		"py":      "python",
-		"py thon": "python",
-		"pthon":   "python",
+		"python":  "Python",
+		"pyt":     "Python",
+		"pyn":     "Python",
+		"pythn":   "Python",
+		"phyton":  "Python",
+		"py":      "Python",
+		"py thon": "Python",
+		"pthon":   "Python",
 
-		"go":      "go",
-		"golang":  "go",
-		"gol":     "go",
-		"goo":     "go",
-		"g o":     "go",
-		"golangg": "go",
+		"go":      "Golang",
+		"golang":  "Golang",
+		"gol":     "Golang",
+		"goo":     "Golang",
+		"g o":     "Golang",
+		"golangg": "Golang",
 	}
 
 	if normalized, ok := languageMap[lang]; ok {
@@ -43,10 +43,4 @@ func NormalizeLanguage(lang string) string {
 	}
 
 	return lang
-}
-
-// GenerateCodeRunCmd will generate a command that combine Run Command and Code
-func GenerateCodeRunCmd(runCmd, code string) string {
-
-	return ""
 }
