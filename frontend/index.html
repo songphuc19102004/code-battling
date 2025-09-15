@@ -48,8 +48,18 @@
                     </div>
                 </div>
 
-                <div class="editor-section">
+                <div class="editor-section" id="editor-section">
                     <h2>Submit Your Solution</h2>
+                    <div class="editor-controls">
+                        <label for="language-selector">Language:</label>
+                        <select id="language-selector">
+                            <option value="javascript" selected>
+                                JavaScript
+                            </option>
+                            <option value="python">Python</option>
+                            <option value="go">Go</option>
+                        </select>
+                    </div>
                     <div
                         id="monaco-editor"
                         style="
@@ -59,7 +69,8 @@
                         "
                     ></div>
                     <button id="submit-button">Submit Solution</button>
-                    <div id="error-log-container">
+                    <div id="error-log-container" style="display: none">
+                        <h3>Execution Error:</h3>
                         <pre id="error-log"></pre>
                     </div>
                 </div>

@@ -1,4 +1,13 @@
 // frontend/app.js
+// Frontend application for Code Battle with Docker-based code execution support
+//
+// Docker Integration Features:
+// - Secure code execution in isolated Docker containers
+// - Multi-language support (JavaScript, Python, Go)
+// - Real-time execution status and progress feedback
+// - Enhanced error handling for Docker execution results
+// - Execution timeout handling for long-running code
+// - Language-specific code templates and syntax highlighting
 document.addEventListener("DOMContentLoaded", () => {
   const apiBaseUrl = "http://localhost:8080";
   let monacoEditor;
@@ -22,6 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const editorContainer = document.getElementById("monaco-editor");
   const submitButton = document.getElementById("submit-button");
   const leaveRoomButton = document.getElementById("leave-room-button");
+  const languageSelector = document.getElementById("language-selector");
   const createRoomForm = document.getElementById("create-room-form");
   const roomNameInput = document.getElementById("room-name-input");
   const roomDescriptionInput = document.getElementById(
@@ -30,18 +40,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const errorLogContainer = document.getElementById("error-log-container");
   const errorLog = document.getElementById("error-log");
 
+  // Execution status elements
+  let executionStatus = null;
+  let isExecuting = false;
+
   // --- Monaco Editor Initialization ---
   require.config({
     paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs" },
   });
   require(["vs/editor/editor.main"], () => {
     monacoEditor = monaco.editor.create(editorContainer, {
-      value: [
-        "// Write your solution here",
-        "function solve() {",
-        "\treturn true;",
-        "}",
-      ].join("\n"),
+      value: getDefaultCode("javascript"),
       language: "javascript",
       theme: "vs-dark",
       automaticLayout: true,
@@ -53,6 +62,36 @@ document.addEventListener("DOMContentLoaded", () => {
     monacoEditor.onDidChangeModelContent(() => {
       if (errorLogContainer.style.display === "block") {
         errorLogContainer.style.display = "none";
+      }
+      // Clear execution status when user modifies code
+      if (executionStatus) {
+        executionStatus.remove();
+        executionStatus = null;
+      }
+    });
+
+    // Language selector change handler
+    languageSelector.addEventListener("change", () => {
+      const selectedLanguage = languageSelector.value;
+      const defaultCode = getDefaultCode(selectedLanguage);
+
+      // Update Monaco editor language and content
+      const model = monacoEditor.getModel();
+      monaco.editor.setModelLanguage(
+        model,
+        selectedLanguage === "go" ? "go" : selectedLanguage,
+      );
+      monacoEditor.setValue(defaultCode);
+
+      // Clear any existing error messages
+      if (errorLogContainer.style.display === "block") {
+        errorLogContainer.style.display = "none";
+      }
+
+      // Clear execution status
+      if (executionStatus) {
+        executionStatus.remove();
+        executionStatus = null;
       }
     });
   });
@@ -144,7 +183,36 @@ document.addEventListener("DOMContentLoaded", () => {
     // These events indicate that the leaderboard state has changed.
     leaderboardEventSource.addEventListener(
       "CORRECT_SOLUTION_SUBMITTED",
-      handleLeaderboardUpdate,
+      (event) => {
+        console.log("Correct solution event received:", event.data);
+
+        // Show success message with execution status
+        if (executionStatus) {
+          executionStatus.innerHTML = `
+            <div style="color: #4caf50; font-weight: bold; margin-top: 10px; padding: 10px; background-color: #e8f5e8; border-radius: 4px;">
+              ✅ Code executed successfully! Solution accepted.
+            </div>
+          `;
+          setTimeout(() => {
+            if (executionStatus) {
+              executionStatus.remove();
+              executionStatus = null;
+            }
+          }, 3000);
+        }
+
+        // Clear timeout if execution completed successfully
+        if (executionStatus && executionStatus.timeoutId) {
+          clearTimeout(executionStatus.timeoutId);
+        }
+
+        // Reset execution state
+        isExecuting = false;
+        submitButton.disabled = false;
+        submitButton.textContent = "Submit Solution";
+
+        handleLeaderboardUpdate(event);
+      },
     );
     leaderboardEventSource.addEventListener(
       "PLAYER_JOINED",
@@ -172,12 +240,34 @@ document.addEventListener("DOMContentLoaded", () => {
               : eventPayload.Data;
           }
 
+          // Format Docker execution errors better
+          logMessage = formatDockerError(logMessage);
+
           errorLog.textContent = logMessage;
           errorLogContainer.style.display = "block";
+
+          // Clear timeout and remove execution status
+          if (executionStatus) {
+            if (executionStatus.timeoutId) {
+              clearTimeout(executionStatus.timeoutId);
+            }
+            executionStatus.remove();
+            executionStatus = null;
+          }
+          isExecuting = false;
+          submitButton.disabled = false;
+          submitButton.textContent = "Submit Solution";
         } catch (e) {
           console.error("Failed to parse wrong solution event data:", e);
           errorLog.textContent = "Failed to display error log.";
           errorLogContainer.style.display = "block";
+          // Clear timeout and reset execution state on error
+          if (executionStatus && executionStatus.timeoutId) {
+            clearTimeout(executionStatus.timeoutId);
+          }
+          isExecuting = false;
+          submitButton.disabled = false;
+          submitButton.textContent = "Submit Solution";
         }
       },
     );
@@ -239,7 +329,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
-   * Submits the user's code to the backend.
+   * Submits the user's code to the backend for Docker execution.
+   *
+   * This function handles:
+   * - Code validation and language normalization
+   * - Execution state management (preventing multiple submissions)
+   * - Real-time status updates during Docker container execution
+   * - Timeout handling for long-running executions
+   * - Error recovery and state reset on failures
    */
   async function submitSolution() {
     if (!currentRoomId) {
@@ -247,15 +344,44 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    // Prevent multiple submissions
+    if (isExecuting) {
+      return;
+    }
+
     // Hide any previous error messages before a new submission.
     errorLogContainer.style.display = "none";
 
-    const code = monacoEditor.getValue();
+    const code = monacoEditor.getValue().trim();
+
+    // Basic validation
+    if (!code) {
+      alert("Please write some code before submitting.");
+      return;
+    }
+
+    // Set execution state
+    isExecuting = true;
+    submitButton.disabled = true;
+    submitButton.textContent = "Executing...";
+
+    // Show execution status
+    executionStatus = document.createElement("div");
+    executionStatus.innerHTML = `
+      <div style="color: #2196f3; margin-top: 10px; padding: 10px; background-color: #e3f2fd; border-radius: 4px;">
+        🐳 Executing code in Docker container... This may take a few seconds.
+      </div>
+    `;
+    document.getElementById("editor-section").appendChild(executionStatus);
+
+    // Get selected language and normalize for Docker execution
+    const selectedLanguage = languageSelector.value || "javascript";
+    const normalizedLanguage = normalizeLanguage(selectedLanguage);
 
     const submission = {
       question_id: 1, // default question ID for now
       room_id: parseInt(currentRoomId, 10),
-      language: "javascript",
+      language: normalizedLanguage,
       code: code,
       player_id: currentPlayer.id,
       submitted_at: new Date().toISOString(),
@@ -282,12 +408,128 @@ document.addEventListener("DOMContentLoaded", () => {
 
       console.log("Solution submitted successfully!");
 
+      // Update execution status
+      if (executionStatus) {
+        executionStatus.innerHTML = `
+          <div style="color: #ff9800; margin-top: 10px; padding: 10px; background-color: #fff3e0; border-radius: 4px;">
+            ⏳ Code submitted to execution queue. Waiting for results...
+          </div>
+        `;
+      }
+
+      // Set a timeout to handle cases where Docker execution takes too long
+      const executionTimeout = setTimeout(() => {
+        if (isExecuting) {
+          console.warn("Code execution timeout reached");
+
+          if (executionStatus) {
+            executionStatus.innerHTML = `
+              <div style="color: #f44336; margin-top: 10px; padding: 10px; background-color: #ffebee; border-radius: 4px;">
+                ⚠️ Execution timeout. Docker container may be busy or code is taking too long to execute.
+              </div>
+            `;
+          }
+
+          // Reset execution state after timeout
+          setTimeout(() => {
+            isExecuting = false;
+            submitButton.disabled = false;
+            submitButton.textContent = "Submit Solution";
+
+            if (executionStatus) {
+              executionStatus.remove();
+              executionStatus = null;
+            }
+          }, 5000);
+        }
+      }, 30000); // 30 second timeout
+
+      // Store timeout ID so we can clear it if execution completes normally
+      if (executionStatus) {
+        executionStatus.timeoutId = executionTimeout;
+      }
+
       // Refresh leaderboard after submission
       setTimeout(() => fetchLeaderboard(currentRoomId), 100);
     } catch (error) {
       console.error("Failed to submit solution:", error);
       alert(`Error submitting solution: ${error.message}`);
+
+      // Clear timeout and reset execution state on error
+      if (executionStatus && executionStatus.timeoutId) {
+        clearTimeout(executionStatus.timeoutId);
+      }
+
+      isExecuting = false;
+      submitButton.disabled = false;
+      submitButton.textContent = "Submit Solution";
+
+      if (executionStatus) {
+        executionStatus.remove();
+        executionStatus = null;
+      }
     }
+  }
+
+  /**
+   * Normalizes language names to match Docker execution backend expectations.
+   *
+   * The backend Docker system expects specific language identifiers:
+   * - 'js' for JavaScript execution in Node.js containers
+   * - 'python' for Python execution in Python containers
+   * - 'go' for Go execution in Go compiler containers
+   *
+   * This ensures compatibility with the Docker-based execution system.
+   */
+  function normalizeLanguage(language) {
+    const languageMap = {
+      javascript: "js",
+      js: "js",
+      python: "python",
+      py: "python",
+      golang: "go",
+      go: "go",
+    };
+
+    return languageMap[language.toLowerCase()] || language;
+  }
+
+  /**
+   * Returns default code template for a given language.
+   *
+   * Templates are designed to work with the Docker execution environment
+   * and provide a starting point that will compile/run successfully.
+   */
+  function getDefaultCode(language) {
+    const templates = {
+      javascript: [
+        "// Write your solution here",
+        "function solve() {",
+        "\treturn true;",
+        "}",
+      ].join("\n"),
+      js: [
+        "// Write your solution here",
+        "function solve() {",
+        "\treturn true;",
+        "}",
+      ].join("\n"),
+      python: [
+        "# Write your solution here",
+        "def solve():",
+        "\treturn True",
+      ].join("\n"),
+      go: [
+        "// Write your solution here",
+        "package main",
+        "",
+        "func solve() bool {",
+        "\treturn true",
+        "}",
+      ].join("\n"),
+    };
+
+    return templates[language] || "// Write your solution here";
   }
 
   /**
@@ -410,6 +652,131 @@ document.addEventListener("DOMContentLoaded", () => {
 
   createRoomForm.addEventListener("submit", handleCreateRoom);
 
+  /**
+   * Formats Docker execution errors for better user understanding.
+   *
+   * This function processes error messages from Docker container execution
+   * and formats them into user-friendly error messages. It handles:
+   * - Common programming errors (syntax, reference, type errors)
+   * - Docker-specific issues (timeouts, memory limits, container failures)
+   * - Language-specific error patterns (Python indentation, Go compilation)
+   * - Truncation of overly long error messages
+   */
+  function formatDockerError(errorMessage) {
+    if (!errorMessage || errorMessage.trim() === "") {
+      return "Code execution failed with no output. Please check your syntax and try again.";
+    }
+
+    // Common Docker/execution error patterns
+    if (errorMessage.includes("SyntaxError")) {
+      return `Syntax Error: ${errorMessage.replace(/^.*SyntaxError:?\s*/, "")}`;
+    }
+
+    if (errorMessage.includes("ReferenceError")) {
+      return `Reference Error: ${errorMessage.replace(/^.*ReferenceError:?\s*/, "")}`;
+    }
+
+    if (errorMessage.includes("TypeError")) {
+      return `Type Error: ${errorMessage.replace(/^.*TypeError:?\s*/, "")}`;
+    }
+
+    if (errorMessage.includes("timeout") || errorMessage.includes("SIGKILL")) {
+      return "Execution timeout: Your code took too long to execute. Check for infinite loops.";
+    }
+
+    if (errorMessage.includes("memory") || errorMessage.includes("OOM")) {
+      return "Memory Error: Your code used too much memory. Try optimizing your solution.";
+    }
+
+    if (errorMessage.includes("container") || errorMessage.includes("docker")) {
+      return `Docker execution error: ${errorMessage}`;
+    }
+
+    if (
+      errorMessage.includes("compilation failed") ||
+      errorMessage.includes("compile error")
+    ) {
+      return `Compilation failed: ${errorMessage}`;
+    }
+
+    // Python specific errors
+    if (errorMessage.includes("IndentationError")) {
+      return "Python Indentation Error: Check your code indentation (use spaces or tabs consistently).";
+    }
+
+    if (errorMessage.includes("NameError")) {
+      return `Python Name Error: ${errorMessage.replace(/^.*NameError:?\s*/, "")}`;
+    }
+
+    // Go specific errors
+    if (
+      errorMessage.includes("undefined:") ||
+      errorMessage.includes("not defined")
+    ) {
+      return `Go Error: ${errorMessage}`;
+    }
+
+    // Return cleaned up error message
+    return errorMessage.length > 200
+      ? errorMessage.substring(0, 200) + "..."
+      : errorMessage;
+  }
+
+  /**
+   * Checks if backend Docker execution system is responsive.
+   *
+   * This performs a lightweight health check to determine if the
+   * Docker-based code execution backend is ready to accept submissions.
+   */
+  async function checkExecutionHealth() {
+    try {
+      const response = await fetch(`${apiBaseUrl}/rooms`);
+      return response.ok;
+    } catch (error) {
+      console.warn("Could not check backend health:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Shows Docker execution system status to user.
+   *
+   * Displays a warning banner if the Docker execution system appears
+   * to be starting up or experiencing issues, helping users understand
+   * why code execution might be slower than expected.
+   */
+  async function showExecutionStatus() {
+    const isHealthy = await checkExecutionHealth();
+
+    if (!isHealthy) {
+      const statusElement = document.createElement("div");
+      statusElement.innerHTML = `
+        <div style="background-color: #fff3cd; color: #856404; padding: 10px; margin: 10px 0; border-radius: 4px; border: 1px solid #ffeaa7;">
+          ⚠️ Backend execution system is starting up. Code submission may be slower initially.
+        </div>
+      `;
+      statusElement.id = "execution-status";
+      document
+        .querySelector(".editor-section")
+        .insertBefore(
+          statusElement,
+          document.querySelector(".editor-controls"),
+        );
+
+      // Check again in 10 seconds and remove warning if healthy
+      setTimeout(async () => {
+        const nowHealthy = await checkExecutionHealth();
+        if (nowHealthy) {
+          const statusEl = document.getElementById("execution-status");
+          if (statusEl) {
+            statusEl.remove();
+          }
+        }
+      }, 10000);
+    }
+  }
+
   // --- Initial Load ---
   fetchRooms();
+  showExecutionStatus();
 });
