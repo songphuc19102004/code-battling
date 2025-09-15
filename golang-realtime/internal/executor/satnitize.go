@@ -1,4 +1,4 @@
-package crunner
+package executor
 
 import (
 	"fmt"

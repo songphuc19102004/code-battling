@@ -53,13 +53,17 @@ WHERE id = $1;
 
 -- Languages
 -- name: CreateLanguage :one
-INSERT INTO languages (id, name, compile_cmd, run_cmd, source_file, is_archived)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO languages (id, name, compile_cmd, run_cmd, timeout_second)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: GetLanguage :one
 SELECT * FROM languages
 WHERE id = $1;
+
+-- name: GetLanguageByName :one
+SELECT * FROM languages
+where name = $1;
 
 -- name: ListLanguages :many
 SELECT * FROM languages
@@ -67,7 +71,7 @@ ORDER BY id;
 
 -- name: UpdateLanguage :one
 UPDATE languages
-SET name = $2, compile_cmd = $3, run_cmd = $4, source_file = $5, is_archived = $6
+SET name = $2, compile_cmd = $3, run_cmd = $4, timeout_second = $5
 WHERE id = $1
 RETURNING *;
 

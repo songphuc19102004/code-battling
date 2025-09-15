@@ -3,11 +3,10 @@ package main
 import (
 	"golang-realtime/database"
 	"golang-realtime/internal/channels"
-	"golang-realtime/internal/crunner"
+	"golang-realtime/internal/executor"
 	"golang-realtime/internal/handlers"
 	"golang-realtime/internal/store"
 	"golang-realtime/pkg/common/env"
-	"io"
 	"log"
 	"log/slog"
 	"os"
@@ -44,15 +43,8 @@ func main() {
 
 	cfg := &Config{Port: 8080}
 
-	logFile, err := os.OpenFile("logs/container.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		panic("Cannot open container.log")
-	}
-
-	defer logFile.Close()
-
-	multiWriter := io.MultiWriter(os.Stdout, logFile)
-	slogHandler := tint.NewHandler(multiWriter, &tint.Options{Level: slog.LevelDebug, AddSource: true})
+	// log to os standard output
+	slogHandler := tint.NewHandler(os.Stdout, &tint.Options{Level: slog.LevelDebug, AddSource: true})
 	logger := slog.New(slogHandler)
 	slog.SetDefault(logger) // Set default for any library using slog's default logger
 
@@ -69,13 +61,16 @@ func main() {
 
 	queries := store.New(db)
 
-	crunner := crunner.NewDockerRunnerManager(logger, &crunner.RunnerManagerOptions{
+	worker, err := executor.NewWorkerPool(logger, queries, &executor.WorkerPoolOptions{
 		MaxWorkers:   5,
 		MemoryLimit:  600,
 		MaxJobCount:  3,
 		CpuNanoLimit: 1000,
 	})
-	gr := channels.NewGlobalRooms(queries, crunner)
+	if err != nil {
+		panic(err)
+	}
+	gr := channels.NewGlobalRooms(queries, logger, worker)
 
 	handlerRepo := handlers.NewHandlerRepo(logger, gr, queries)
 

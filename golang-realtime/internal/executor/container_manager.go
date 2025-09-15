@@ -1,16 +1,17 @@
-package crunner
+package executor
 
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/lmittmann/tint"
 )
 
 const (
@@ -34,9 +35,9 @@ type ContainerInfo struct {
 	State container.ContainerState
 }
 
-type DockerRunnerManager struct {
+type DockerContainerManager struct {
 	mu            sync.Mutex
-	logger        *slog.Logger
+	logger        *slog.Logger // this logger both writes to terminal and to log file
 	cli           *client.Client
 	containers    map[string]*ContainerInfo
 	maxWorkers    int
@@ -44,49 +45,38 @@ type DockerRunnerManager struct {
 	cpunanoLimit  int64
 }
 
-func NewDockerClient() *client.Client {
+func NewDockerClient() (*client.Client, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return cli
+	return cli, nil
 }
 
-func NewDockerRunnerManager(logger *slog.Logger, opts *RunnerManagerOptions) *DockerRunnerManager {
-	dockerClient := NewDockerClient()
-	return &DockerRunnerManager{
+func NewDockerContainerManager() (*DockerContainerManager, error) {
+	dockerClient, err := NewDockerClient()
+	if err != nil {
+		return nil, err
+	}
+
+	// write to both terminal and log file
+	logFile, err := os.OpenFile("logs/container.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		panic("Cannot open container.log")
+	}
+
+	defer logFile.Close()
+
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+	slogHandler := tint.NewHandler(multiWriter, &tint.Options{Level: slog.LevelDebug, AddSource: true})
+	logger := slog.New(slogHandler)
+	return &DockerContainerManager{
 		logger: logger,
 		cli:    dockerClient,
-	}
+	}, nil
 }
 
-// Run will create an isolate job and wait for the job to run
-func (d *DockerRunnerManager) Execute(i RunInput, logger *slog.Logger) (RunOutput, error) {
-	d.logger.Info("runContainer() hit")
-	var o RunOutput
-
-	dir, err := os.MkdirTemp("", "example")
-	if err != nil {
-		d.logger.Error("error making dir", "err", err)
-		return o, err
-	}
-
-	defer os.RemoveAll(dir)
-
-	file := filepath.Join(dir, "tmpfile")
-	if err := os.WriteFile(file, []byte("content"), 0666); err != nil {
-		d.logger.Error("error writing file",
-			"err", err,
-			"file", file,
-		)
-
-		return o, err
-	}
-
-	return o, nil
-}
-
-func (d *DockerRunnerManager) InitiazlizePool() error {
+func (d *DockerContainerManager) InitiazlizePool() error {
 	ctx := context.Background()
 	containers, err := d.cli.ContainerList(ctx, container.ListOptions{All: true})
 	if err != nil {
@@ -120,7 +110,7 @@ func (d *DockerRunnerManager) InitiazlizePool() error {
 	return nil
 }
 
-func (d *DockerRunnerManager) StartContainer() error {
+func (d *DockerContainerManager) StartContainer() error {
 	ctx := context.Background()
 
 	d.mu.Lock()
@@ -174,7 +164,7 @@ func (d *DockerRunnerManager) StartContainer() error {
 }
 
 // removeExcessContainer remove excess containers beyond maxWorkers
-func (d *DockerRunnerManager) removeExcessContainer(amount int) error {
+func (d *DockerContainerManager) removeExcessContainer(amount int) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -195,7 +185,7 @@ func (d *DockerRunnerManager) removeExcessContainer(amount int) error {
 }
 
 // RemoveContainer safelys remove a Container
-func (d *DockerRunnerManager) RemoveContainer(id string) error {
+func (d *DockerContainerManager) RemoveContainer(id string) error {
 	ctx := context.Background()
 
 	// remove container
@@ -213,7 +203,7 @@ func (d *DockerRunnerManager) RemoveContainer(id string) error {
 }
 
 // MonitorContainers run in a loop to check containers health
-func (d *DockerRunnerManager) MonitorContainers(wg *sync.WaitGroup, intervalSecond int) {
+func (d *DockerContainerManager) MonitorContainers(wg *sync.WaitGroup, intervalSecond int) {
 	defer wg.Done()
 	ticker := time.NewTicker(time.Duration(intervalSecond) * time.Second)
 
@@ -223,7 +213,7 @@ func (d *DockerRunnerManager) MonitorContainers(wg *sync.WaitGroup, intervalSeco
 }
 
 // checkHealth check the state of each Container
-func (d *DockerRunnerManager) checkHealth() {
+func (d *DockerContainerManager) checkHealth() {
 	ctx := context.Background()
 	containers, err := d.cli.ContainerList(ctx, container.ListOptions{All: true})
 	if err != nil {
@@ -254,14 +244,14 @@ func (d *DockerRunnerManager) checkHealth() {
 	}
 }
 
-func (d *DockerRunnerManager) isRunningContainer(c container.Summary) bool {
+func (d *DockerContainerManager) isRunningContainer(c container.Summary) bool {
 	_, exists := d.containers[c.ID]
 	running := c.State != StateError
 	return c.Image == "worker" && exists && running
 }
 
 // balanceWorker ensure the number of workers is exactly equal to `maxWorkers`
-func (d *DockerRunnerManager) balanceWorker() error {
+func (d *DockerContainerManager) balanceWorker() error {
 	currentCount := len(d.containers)
 	if currentCount < d.maxWorkers {
 		d.logger.Info("Current workers is not at the limit",
@@ -288,7 +278,7 @@ func (d *DockerRunnerManager) balanceWorker() error {
 }
 
 // GetAvailableContainer finds an Idle Container
-func (d *DockerRunnerManager) GetAvailableContainer() (string, error) {
+func (d *DockerContainerManager) GetAvailableContainer() (string, error) {
 	for range maxRetries {
 		// Lock every trial
 		d.mu.Lock()
@@ -306,4 +296,32 @@ func (d *DockerRunnerManager) GetAvailableContainer() (string, error) {
 	}
 
 	return "", nil
+}
+
+// ShutDown cleans up all containers
+func (d *DockerContainerManager) ShutDown() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.logger.Info("Shutting down all Containers...")
+	for _, c := range d.containers {
+		d.RemoveContainer(c.ID)
+	}
+	d.logger.Info("Shutdown process is done")
+}
+
+// SetContainerState set the status of a specific Container
+func (d *DockerContainerManager) SetContainerState(containerID, state container.ContainerState) error {
+	c, exists := d.containers[containerID]
+	if !exists {
+		d.logger.Error("Failed to find Container",
+			"container_id", containerID)
+		return ErrContainerNotFound
+	}
+
+	c.State = state
+	d.logger.Info("Container state is set",
+		"container_id", containerID,
+		"state", state)
+
+	return nil
 }

@@ -3,11 +3,10 @@
 
 CREATE TABLE public.languages (
   id integer NOT NULL DEFAULT nextval('languages_id_seq'::regclass),
-  name character varying,
+  name character varying NOT NULL UNIQUE,
   compile_cmd character varying,
   run_cmd character varying,
-  source_file character varying,
-  is_archived boolean DEFAULT false,
+  timeout_second double precision,
   CONSTRAINT languages_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.players (

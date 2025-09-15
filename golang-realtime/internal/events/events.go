@@ -1,8 +1,7 @@
 package events
 
 import (
-	"golang-realtime/internal/crunner"
-	"golang-realtime/internal/store"
+	"golang-realtime/internal/executor"
 	"time"
 )
 
@@ -35,8 +34,7 @@ type SolutionSubmitted struct {
 
 type SolutionResult struct {
 	SolutionSubmitted SolutionSubmitted
-	Correct           bool
-	RunOutput         crunner.RunOutput
+	Result            executor.Result
 }
 
 type LeaderboardUpdated struct {
@@ -55,9 +53,4 @@ type PlayerLeft struct {
 
 type RoomDeleted struct {
 	RoomId int32
-}
-
-type CompilationTest struct {
-	Code     string
-	Language store.Language
 }

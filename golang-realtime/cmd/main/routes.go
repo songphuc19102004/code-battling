@@ -39,9 +39,5 @@ func (app *Application) routes() http.Handler {
 		r.Get("/", app.handlers.ListQuestionsHandler)
 	})
 
-	mux.Route("/isolate", func(r chi.Router) {
-		r.Get("/test/{room_id}", app.handlers.GetIsolateTestHandler)
-	})
-
 	return mux
 }

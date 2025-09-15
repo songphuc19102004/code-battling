@@ -38,18 +38,17 @@ func (q *Queries) AddRoomPlayerScore(ctx context.Context, arg AddRoomPlayerScore
 }
 
 const createLanguage = `-- name: CreateLanguage :one
-INSERT INTO languages (id, name, compile_cmd, run_cmd, source_file, is_archived)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, name, compile_cmd, run_cmd, source_file, is_archived
+INSERT INTO languages (id, name, compile_cmd, run_cmd, timeout_second)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, name, compile_cmd, run_cmd, timeout_second
 `
 
 type CreateLanguageParams struct {
-	ID         int32
-	Name       pgtype.Text
-	CompileCmd pgtype.Text
-	RunCmd     pgtype.Text
-	SourceFile pgtype.Text
-	IsArchived pgtype.Bool
+	ID            int32
+	Name          string
+	CompileCmd    pgtype.Text
+	RunCmd        pgtype.Text
+	TimeoutSecond pgtype.Float8
 }
 
 // Languages
@@ -59,8 +58,7 @@ func (q *Queries) CreateLanguage(ctx context.Context, arg CreateLanguageParams) 
 		arg.Name,
 		arg.CompileCmd,
 		arg.RunCmd,
-		arg.SourceFile,
-		arg.IsArchived,
+		arg.TimeoutSecond,
 	)
 	var i Language
 	err := row.Scan(
@@ -68,8 +66,7 @@ func (q *Queries) CreateLanguage(ctx context.Context, arg CreateLanguageParams) 
 		&i.Name,
 		&i.CompileCmd,
 		&i.RunCmd,
-		&i.SourceFile,
-		&i.IsArchived,
+		&i.TimeoutSecond,
 	)
 	return i, err
 }
@@ -439,7 +436,7 @@ func (q *Queries) DeleteTestCase(ctx context.Context, id int32) error {
 }
 
 const getLanguage = `-- name: GetLanguage :one
-SELECT id, name, compile_cmd, run_cmd, source_file, is_archived FROM languages
+SELECT id, name, compile_cmd, run_cmd, timeout_second FROM languages
 WHERE id = $1
 `
 
@@ -451,8 +448,25 @@ func (q *Queries) GetLanguage(ctx context.Context, id int32) (Language, error) {
 		&i.Name,
 		&i.CompileCmd,
 		&i.RunCmd,
-		&i.SourceFile,
-		&i.IsArchived,
+		&i.TimeoutSecond,
+	)
+	return i, err
+}
+
+const getLanguageByName = `-- name: GetLanguageByName :one
+SELECT id, name, compile_cmd, run_cmd, timeout_second FROM languages
+where name = $1
+`
+
+func (q *Queries) GetLanguageByName(ctx context.Context, name string) (Language, error) {
+	row := q.db.QueryRow(ctx, getLanguageByName, name)
+	var i Language
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CompileCmd,
+		&i.RunCmd,
+		&i.TimeoutSecond,
 	)
 	return i, err
 }
@@ -681,7 +695,7 @@ func (q *Queries) GetTestCase(ctx context.Context, id int32) (TestCase, error) {
 }
 
 const listLanguages = `-- name: ListLanguages :many
-SELECT id, name, compile_cmd, run_cmd, source_file, is_archived FROM languages
+SELECT id, name, compile_cmd, run_cmd, timeout_second FROM languages
 ORDER BY id
 `
 
@@ -699,8 +713,7 @@ func (q *Queries) ListLanguages(ctx context.Context) ([]Language, error) {
 			&i.Name,
 			&i.CompileCmd,
 			&i.RunCmd,
-			&i.SourceFile,
-			&i.IsArchived,
+			&i.TimeoutSecond,
 		); err != nil {
 			return nil, err
 		}
@@ -962,18 +975,17 @@ func (q *Queries) ListTestCasesForQuestion(ctx context.Context, arg ListTestCase
 
 const updateLanguage = `-- name: UpdateLanguage :one
 UPDATE languages
-SET name = $2, compile_cmd = $3, run_cmd = $4, source_file = $5, is_archived = $6
+SET name = $2, compile_cmd = $3, run_cmd = $4, timeout_second = $5
 WHERE id = $1
-RETURNING id, name, compile_cmd, run_cmd, source_file, is_archived
+RETURNING id, name, compile_cmd, run_cmd, timeout_second
 `
 
 type UpdateLanguageParams struct {
-	ID         int32
-	Name       pgtype.Text
-	CompileCmd pgtype.Text
-	RunCmd     pgtype.Text
-	SourceFile pgtype.Text
-	IsArchived pgtype.Bool
+	ID            int32
+	Name          string
+	CompileCmd    pgtype.Text
+	RunCmd        pgtype.Text
+	TimeoutSecond pgtype.Float8
 }
 
 func (q *Queries) UpdateLanguage(ctx context.Context, arg UpdateLanguageParams) (Language, error) {
@@ -982,8 +994,7 @@ func (q *Queries) UpdateLanguage(ctx context.Context, arg UpdateLanguageParams) 
 		arg.Name,
 		arg.CompileCmd,
 		arg.RunCmd,
-		arg.SourceFile,
-		arg.IsArchived,
+		arg.TimeoutSecond,
 	)
 	var i Language
 	err := row.Scan(
@@ -991,8 +1002,7 @@ func (q *Queries) UpdateLanguage(ctx context.Context, arg UpdateLanguageParams) 
 		&i.Name,
 		&i.CompileCmd,
 		&i.RunCmd,
-		&i.SourceFile,
-		&i.IsArchived,
+		&i.TimeoutSecond,
 	)
 	return i, err
 }

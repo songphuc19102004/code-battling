@@ -3,8 +3,8 @@ package channels
 import (
 	"context"
 	"fmt"
-	"golang-realtime/internal/crunner"
 	"golang-realtime/internal/events"
+	"golang-realtime/internal/executor"
 	"golang-realtime/internal/store"
 	"log/slog"
 	"sync"
@@ -21,7 +21,7 @@ type RoomManager struct {
 	RoomId        int32
 	Events        chan any
 	Listerners    map[int32]chan<- events.SseEvent
-	crunner       crunner.CRunner
+	worker        *executor.WorkerPool
 	logger        *slog.Logger
 	queries       *store.Queries
 	Mu            sync.RWMutex // Protects Listerners map
@@ -30,19 +30,20 @@ type RoomManager struct {
 
 // basically, GlobalRooms struct holds all the RoomManagers (channel) of each room
 type GlobalRooms struct {
-	Mu sync.RWMutex
+	Mu      sync.RWMutex
+	worker  *executor.WorkerPool
+	logger  *slog.Logger
+	queries *store.Queries
 	// roomId -> roomManager
 	Rooms map[int32]*RoomManager
-
-	crunner crunner.CRunner
 }
 
-func NewGlobalRooms(queries *store.Queries, crunner crunner.CRunner) *GlobalRooms {
+func NewGlobalRooms(queries *store.Queries, logger *slog.Logger, worker *executor.WorkerPool) *GlobalRooms {
 	// Initialize testing rooms for development
 	rooms := map[int32]*RoomManager{
-		1: NewRoomManager(1, queries, crunner),
-		2: NewRoomManager(2, queries, crunner),
-		3: NewRoomManager(3, queries, crunner),
+		1: NewRoomManager(1, queries, worker),
+		2: NewRoomManager(2, queries, worker),
+		3: NewRoomManager(3, queries, worker),
 	}
 
 	for _, rm := range rooms {
@@ -51,7 +52,9 @@ func NewGlobalRooms(queries *store.Queries, crunner crunner.CRunner) *GlobalRoom
 
 	return &GlobalRooms{
 		Rooms:   rooms,
-		crunner: crunner,
+		worker:  worker,
+		logger:  logger,
+		queries: queries,
 	}
 }
 
@@ -62,7 +65,7 @@ func (gr *GlobalRooms) GetRoomById(roomId int32) *RoomManager {
 }
 
 func (gr *GlobalRooms) CreateRoom(roomId int32, queries *store.Queries) *RoomManager {
-	rm := NewRoomManager(roomId, queries, gr.crunner)
+	rm := NewRoomManager(roomId, queries, gr.worker)
 	gr.Mu.Lock()
 	gr.Rooms[roomId] = rm
 	gr.Mu.Unlock()
@@ -70,7 +73,7 @@ func (gr *GlobalRooms) CreateRoom(roomId int32, queries *store.Queries) *RoomMan
 	return rm
 }
 
-func NewRoomManager(roomId int32, queries *store.Queries, crunner crunner.CRunner) *RoomManager {
+func NewRoomManager(roomId int32, queries *store.Queries, worker *executor.WorkerPool) *RoomManager {
 	return &RoomManager{
 		RoomId:        roomId,
 		Events:        make(chan any, 10),
@@ -79,7 +82,7 @@ func NewRoomManager(roomId int32, queries *store.Queries, crunner crunner.CRunne
 		queries:       queries,
 		Mu:            sync.RWMutex{},
 		leaderboardMu: sync.Mutex{}, // Initialize the new mutex
-		crunner:       crunner,
+		worker:        worker,
 	}
 }
 
@@ -107,10 +110,6 @@ func (rm *RoomManager) Start() {
 		case events.RoomDeleted:
 			if err := rm.processRoomDeleted(e); err != nil {
 				rm.logger.Error("failed to process room deleted event", "error", err)
-			}
-		case events.CompilationTest:
-			if err := rm.processCompilationTest(e); err != nil {
-				rm.logger.Error("failed to process compilation test event", "error", err)
 			}
 		}
 	}
@@ -204,66 +203,38 @@ func (rm *RoomManager) dispatchEventToPlayer(e events.SseEvent, playerID int32) 
 func (rm *RoomManager) processSolutionSubmitted(event events.SolutionSubmitted) error {
 	rm.logger.Info("solution submitted", "event", event)
 
-	// test compilation
-	// compilationTest := events.CompilationTest{
-	// 	Code:     "foo",
-	// 	Language: store.Language{},
-	// }
-
-	// rm.Events <- compilationTest
+	// Execute job
+	o := rm.worker.ExecuteJob(event.Language, event.Code)
 
 	result := events.SolutionResult{
 		SolutionSubmitted: event,
-		Correct:           true,
-		RunOutput: crunner.RunOutput{
-			Result: crunner.Success,
-		},
+		Result:            o,
 	}
 
 	rm.Events <- result
 
-	// spin up container and run in the background
-	// go func() {
-	// 	i := crunner.RunInput{}
-	// 	o, err := rm.crunner.Run(i, rm.logger)
-	// 	if err != nil {
-	// 		rm.logger.Error("failed to run container", "error", err)
-	// 		return
-	// 	}
-
-	// 	e := events.SolutionResult{
-	// 		SolutionSubmitted: event,
-	// 		RunOutput:         o,
-	// 	}
-
-	// 	rm.Events <- e
-	// }()
-
 	return nil
 }
 
-// This function will work with database (updating tables) and send the fetchLeaderboard event to the frontend
 func (rm *RoomManager) processSolutionResult(e events.SolutionResult) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	rm.logger.Info("processCorrectSoltuionResult() hit", "event", e)
+	rm.logger.Info("processSoltuionResult() hit", "event", e)
 
 	// compiled failed
-	if e.RunOutput.Result == crunner.Failure {
+	if !e.Result.Sucess {
 		rm.logger.Info("solution failed", "event", e)
-		e.RunOutput.Log = "runtime error: index out of range"
+		e.Result.Output = "runtime error: index out of range"
 		sseEvent := events.SseEvent{
 			EventType: events.WRONG_SOLUTION_SUBMITTED,
-			Data:      fmt.Sprintf("log:%v", e.RunOutput.Log),
+			Data:      fmt.Sprintf("log:%v", e.Result.Output),
 		}
 
 		go rm.dispatchEventToPlayer(sseEvent, e.SolutionSubmitted.PlayerId)
 
 		return nil
 	}
-
-	// true
 
 	rm.queries.AddRoomPlayerScore(ctx, store.AddRoomPlayerScoreParams{
 		RoomID:      e.SolutionSubmitted.RoomId,
@@ -437,26 +408,5 @@ func (rm *RoomManager) processRoomDeleted(event events.RoomDeleted) error {
 
 	go rm.dispatchEvent(sseEvent)
 
-	return nil
-}
-
-func (rm *RoomManager) processCompilationTest(ct events.CompilationTest) error {
-	i := crunner.RunInput{
-		Code:     ct.Code,
-		Language: ct.Language,
-	}
-	o, err := rm.crunner.Execute(i, rm.logger)
-	if err != nil {
-		return err
-	}
-
-	sse := events.SseEvent{
-		EventType: events.COMPILATION_TEST,
-		Data:      o,
-	}
-
-	go rm.dispatchEvent(sse)
-
-	// send to process result
 	return nil
 }

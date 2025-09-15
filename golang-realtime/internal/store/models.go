@@ -9,18 +9,17 @@ import (
 )
 
 type Language struct {
-	ID         int32
-	Name       pgtype.Text
-	CompileCmd pgtype.Text
-	RunCmd     pgtype.Text
-	SourceFile pgtype.Text
-	IsArchived pgtype.Bool
+	ID            int32
+	Name          string
+	CompileCmd    pgtype.Text
+	RunCmd        pgtype.Text
+	TimeoutSecond pgtype.Float8
 }
 
 type Player struct {
-	ID       int32  `json:"id"`
-	Name     string `json:"name"`
-	Password string `json:"-"`
+	ID       int32
+	Name     string
+	Password string
 }
 
 type Question struct {
@@ -34,17 +33,17 @@ type Question struct {
 }
 
 type Room struct {
-	ID          int32       `json:"id"`
-	Name        string      `json:"name"`
-	Description pgtype.Text `json:"description"`
+	ID          int32
+	Name        string
+	Description pgtype.Text
 }
 
 type RoomPlayer struct {
-	RoomID   int32       `json:"room_id"`
-	PlayerID int32       `json:"player_id"`
-	Score    pgtype.Int4 `json:"score"`
-	Place    pgtype.Int4 `json:"place"`
-	State    pgtype.Text `json:"state"`
+	RoomID   int32
+	PlayerID int32
+	Score    pgtype.Int4
+	Place    pgtype.Int4
+	State    pgtype.Text
 }
 
 type Submission struct {
