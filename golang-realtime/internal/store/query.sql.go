@@ -318,25 +318,23 @@ func (q *Queries) CreateSubmission(ctx context.Context, arg CreateSubmissionPara
 }
 
 const createTestCase = `-- name: CreateTestCase :one
-INSERT INTO test_cases (question_id, question_language_id, input, expected_output, time_constraint, space_constraint)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, question_id, question_language_id, input, expected_output, time_constraint, space_constraint
+INSERT INTO test_cases (question_id, input, expected_output, time_constraint, space_constraint)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, question_id, input, expected_output, time_constraint, space_constraint
 `
 
 type CreateTestCaseParams struct {
-	QuestionID         int32
-	QuestionLanguageID int32
-	Input              string
-	ExpectedOutput     string
-	TimeConstraint     pgtype.Float8
-	SpaceConstraint    pgtype.Int4
+	QuestionID      int32
+	Input           string
+	ExpectedOutput  string
+	TimeConstraint  pgtype.Float8
+	SpaceConstraint pgtype.Int4
 }
 
 // Test Cases
 func (q *Queries) CreateTestCase(ctx context.Context, arg CreateTestCaseParams) (TestCase, error) {
 	row := q.db.QueryRow(ctx, createTestCase,
 		arg.QuestionID,
-		arg.QuestionLanguageID,
 		arg.Input,
 		arg.ExpectedOutput,
 		arg.TimeConstraint,
@@ -346,7 +344,6 @@ func (q *Queries) CreateTestCase(ctx context.Context, arg CreateTestCaseParams) 
 	err := row.Scan(
 		&i.ID,
 		&i.QuestionID,
-		&i.QuestionLanguageID,
 		&i.Input,
 		&i.ExpectedOutput,
 		&i.TimeConstraint,
@@ -675,7 +672,7 @@ func (q *Queries) GetSubmission(ctx context.Context, id int32) (Submission, erro
 }
 
 const getTestCase = `-- name: GetTestCase :one
-SELECT id, question_id, question_language_id, input, expected_output, time_constraint, space_constraint FROM test_cases
+SELECT id, question_id, input, expected_output, time_constraint, space_constraint FROM test_cases
 WHERE id = $1
 `
 
@@ -685,7 +682,6 @@ func (q *Queries) GetTestCase(ctx context.Context, id int32) (TestCase, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.QuestionID,
-		&i.QuestionLanguageID,
 		&i.Input,
 		&i.ExpectedOutput,
 		&i.TimeConstraint,
@@ -935,18 +931,13 @@ func (q *Queries) ListSubmissions(ctx context.Context) ([]Submission, error) {
 }
 
 const listTestCasesForQuestion = `-- name: ListTestCasesForQuestion :many
-SELECT id, question_id, question_language_id, input, expected_output, time_constraint, space_constraint FROM test_cases
-WHERE question_id = $1 AND question_language_id = $2
+SELECT id, question_id, input, expected_output, time_constraint, space_constraint FROM test_cases
+WHERE question_id = $1
 ORDER BY id
 `
 
-type ListTestCasesForQuestionParams struct {
-	QuestionID         int32
-	QuestionLanguageID int32
-}
-
-func (q *Queries) ListTestCasesForQuestion(ctx context.Context, arg ListTestCasesForQuestionParams) ([]TestCase, error) {
-	rows, err := q.db.Query(ctx, listTestCasesForQuestion, arg.QuestionID, arg.QuestionLanguageID)
+func (q *Queries) ListTestCasesForQuestion(ctx context.Context, questionID int32) ([]TestCase, error) {
+	rows, err := q.db.Query(ctx, listTestCasesForQuestion, questionID)
 	if err != nil {
 		return nil, err
 	}
@@ -957,7 +948,6 @@ func (q *Queries) ListTestCasesForQuestion(ctx context.Context, arg ListTestCase
 		if err := rows.Scan(
 			&i.ID,
 			&i.QuestionID,
-			&i.QuestionLanguageID,
 			&i.Input,
 			&i.ExpectedOutput,
 			&i.TimeConstraint,
@@ -1278,7 +1268,7 @@ const updateTestCase = `-- name: UpdateTestCase :one
 UPDATE test_cases
 SET input = $2, expected_output = $3, time_constraint = $4, space_constraint = $5
 WHERE id = $1
-RETURNING id, question_id, question_language_id, input, expected_output, time_constraint, space_constraint
+RETURNING id, question_id, input, expected_output, time_constraint, space_constraint
 `
 
 type UpdateTestCaseParams struct {
@@ -1301,7 +1291,6 @@ func (q *Queries) UpdateTestCase(ctx context.Context, arg UpdateTestCaseParams) 
 	err := row.Scan(
 		&i.ID,
 		&i.QuestionID,
-		&i.QuestionLanguageID,
 		&i.Input,
 		&i.ExpectedOutput,
 		&i.TimeConstraint,

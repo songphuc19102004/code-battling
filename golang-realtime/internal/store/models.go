@@ -89,11 +89,10 @@ type Submission struct {
 }
 
 type TestCase struct {
-	ID                 int32         `json:"id"`
-	QuestionID         int32         `json:"question_id"`
-	QuestionLanguageID int32         `json:"question_language_id"`
-	Input              string        `json:"input"`
-	ExpectedOutput     string        `json:"expected_output"`
-	TimeConstraint     pgtype.Float8 `json:"time_constraint"`
-	SpaceConstraint    pgtype.Int4   `json:"space_constraint"`
+	ID              int32         `json:"id"`
+	QuestionID      int32         `json:"question_id"`
+	Input           string        `json:"input"`
+	ExpectedOutput  string        `json:"expected_output"`
+	TimeConstraint  pgtype.Float8 `json:"time_constraint"`
+	SpaceConstraint pgtype.Int4   `json:"space_constraint"`
 }

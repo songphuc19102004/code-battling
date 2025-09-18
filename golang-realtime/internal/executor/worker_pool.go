@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	service "golang-realtime/internal/services"
 	"golang-realtime/internal/store"
 	"log/slog"
 	"os/exec"
@@ -14,13 +13,14 @@ import (
 )
 
 const (
-	QueryTimeOutSecond   = 5 * time.Second
+	QueryTimeOutSecond   = 10 * time.Second
 	CodeRunTimeOutSecond = 10 * time.Second
 )
 
 type Job struct {
-	Language string
+	Language store.Language
 	Code     string
+	Input    *string
 	Result   chan Result
 }
 
@@ -99,13 +99,14 @@ func (w *WorkerPool) worker(id int) {
 }
 
 // ExecuteJob submits the job for execution
-func (w *WorkerPool) ExecuteJob(lang, code string) Result {
+// input as a pointer so we could either set it or make it null
+func (w *WorkerPool) ExecuteJob(lang store.Language, code string, input *string) Result {
 	w.logger.Info("Submitting job...",
 		"language", lang)
 
 	result := make(chan Result, 1)
 	select {
-	case w.jobs <- Job{Language: lang, Code: code, Result: result}:
+	case w.jobs <- Job{Language: lang, Code: code, Input: input, Result: result}:
 		return <-result
 	default:
 		w.logger.Warn("Job queue is full, rejecting job...",
@@ -117,6 +118,9 @@ func (w *WorkerPool) ExecuteJob(lang, code string) Result {
 
 // executeJob handle the execution of a *single* job
 func (w *WorkerPool) executeJob(workerID int, job Job) error {
+	w.logger.Info("Job has been picked",
+		"worker_id", workerID,
+		"job", job)
 	containerID, err := w.cm.GetAvailableContainer()
 	if err != nil {
 		w.logger.Error("Failed to get available Container",
@@ -130,7 +134,7 @@ func (w *WorkerPool) executeJob(workerID int, job Job) error {
 	}
 
 	start := time.Now()
-	output, success, err := w.executeCode(containerID, job.Code, job.Language)
+	output, success, err := w.executeCode(job.Language, containerID, job.Code, job.Input)
 	duration := time.Since(start)
 
 	if err != nil {
@@ -161,47 +165,48 @@ func (w *WorkerPool) executeJob(workerID int, job Job) error {
 }
 
 // executeCode run the code in a specific Container
-func (w *WorkerPool) executeCode(containerID, code, lang string) (string, bool, error) {
+func (w *WorkerPool) executeCode(lang store.Language, containerID, code string, input *string) (string, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), QueryTimeOutSecond)
 	defer cancel()
 
-	normalized := service.NormalizeLanguage(lang)
-	langCfg, err := w.queries.GetLanguageByName(ctx, normalized)
-	if err != nil {
-		w.logger.Error("Failed to get language config",
-			"lang", lang,
-			"err", err)
-		return "", false, err
+	// TODO: add input
+	var stdout, stderr bytes.Buffer
+	runCmd := generateRunCmd(lang.RunCmd.String, code)
+
+	// -i for interactive
+	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", containerID, "sh", "-c", runCmd)
+
+	if input != nil {
+		w.logger.Info("Input is not nil",
+			"input", *input)
+		cmd.Stdin = strings.NewReader(*input)
 	}
 
-	var output bytes.Buffer
-	runCmdArgs := generateCodeRunCmd(containerID, langCfg.RunCmd.String, code)
-	cmd := exec.CommandContext(ctx, "docker", append([]string{"exec", containerID, "sh", "-c"}, runCmdArgs...)...)
-	cmd.Stdout = &output
-	cmd.Stderr = &output
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
 	start := time.Now()
-	err = cmd.Run()
+	err := cmd.Run()
 	duration := time.Since(start)
 	if err != nil {
 		w.logger.Error("Failed to execute code",
 			"container_id", containerID,
 			"duration", duration,
-			"err", err)
-		return output.String(), false, err
+			"err", err,
+			"stdout", stdout.String(),
+			"stderr", stderr.String())
+		return stderr.String(), false, err
 	}
 
 	w.logger.Info("Code Execution Completed",
 		"container_id", containerID,
 		"duration", duration)
 
-	return output.String(), true, nil
+	return stdout.String(), true, nil
 }
 
-// GenerateCodeRunCmd will generate a command that combine Run Command and Code
-func generateCodeRunCmd(containerID, runCmd, code string) []string {
-	formattedCode := strings.ReplaceAll(code, "'", "'\\''")
-	runCmd = fmt.Sprintf(runCmd, formattedCode)
-	cmd := append([]string{"exec", containerID, "sh", "-c"}, runCmd)
-	return cmd
+// generateCodeRunCmd will generate a run command for the code
+func generateRunCmd(runCmd, finalCode string) string {
+	formattedCode := strings.ReplaceAll(finalCode, "'", "'\\''")
+	return fmt.Sprintf(runCmd, formattedCode)
 }

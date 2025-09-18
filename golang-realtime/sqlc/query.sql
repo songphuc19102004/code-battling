@@ -112,8 +112,8 @@ WHERE id = $1 AND language_id = $2;
 
 -- Test Cases
 -- name: CreateTestCase :one
-INSERT INTO test_cases (question_id, question_language_id, input, expected_output, time_constraint, space_constraint)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO test_cases (question_id, input, expected_output, time_constraint, space_constraint)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: GetTestCase :one
@@ -122,7 +122,7 @@ WHERE id = $1;
 
 -- name: ListTestCasesForQuestion :many
 SELECT * FROM test_cases
-WHERE question_id = $1 AND question_language_id = $2
+WHERE question_id = $1
 ORDER BY id;
 
 -- name: UpdateTestCase :one

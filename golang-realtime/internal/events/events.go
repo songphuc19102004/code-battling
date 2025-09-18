@@ -1,7 +1,6 @@
 package events
 
 import (
-	"golang-realtime/internal/executor"
 	"time"
 )
 
@@ -23,6 +22,17 @@ type SseEvent struct {
 	Data      any
 }
 
+type JudgeStatus string
+
+const (
+	Accepted            JudgeStatus = "Accepted"
+	WrongAnswer         JudgeStatus = "Wrong Answer"
+	RuntimeError        JudgeStatus = "Runtime Error"
+	CompilationError    JudgeStatus = "Compilation Error"
+	TimeLimitExceeded   JudgeStatus = "Time Limit Exceeded"   // For the future
+	MemoryLimitExceeded JudgeStatus = "Memory Limit Exceeded" // For the future
+)
+
 type SolutionSubmitted struct {
 	PlayerId      int32
 	RoomId        int32
@@ -34,7 +44,8 @@ type SolutionSubmitted struct {
 
 type SolutionResult struct {
 	SolutionSubmitted SolutionSubmitted
-	Result            executor.Result
+	Status            JudgeStatus
+	Message           string
 }
 
 type LeaderboardUpdated struct {

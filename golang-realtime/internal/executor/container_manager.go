@@ -294,9 +294,9 @@ func (d *DockerContainerManager) GetAvailableContainer() (string, error) {
 					"container_id", id)
 				return id, nil
 			}
-			d.mu.Unlock()
-			time.Sleep(time.Duration(retryDelayMS) * time.Millisecond)
 		}
+		d.mu.Unlock()
+		time.Sleep(time.Duration(retryDelayMS) * time.Millisecond)
 	}
 
 	return "", nil

@@ -5,12 +5,18 @@ import (
 	"fmt"
 	"golang-realtime/internal/events"
 	"golang-realtime/internal/executor"
+	service "golang-realtime/internal/services"
 	"golang-realtime/internal/store"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+)
+
+const (
+	DefaultQueryTimeoutSecond = 10 * time.Second
 )
 
 // event-based
@@ -200,20 +206,77 @@ func (rm *RoomManager) dispatchEventToPlayer(e events.SseEvent, playerID int32) 
 	}(listener, playerID)
 }
 
+// TODO: Rewrite processSolutionSubmitted and processSolutionResult
 func (rm *RoomManager) processSolutionSubmitted(event events.SolutionSubmitted) error {
-	rm.logger.Info("solution submitted", "event", event)
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultQueryTimeoutSecond)
+	defer cancel()
 
-	// Execute job
-	o := rm.worker.ExecuteJob(event.Language, event.Code)
+	normalizedLang := service.NormalizeLanguage(event.Language)
 
-	result := events.SolutionResult{
-		SolutionSubmitted: event,
-		Result:            o,
+	lang, err := rm.queries.GetLanguageByName(ctx, normalizedLang)
+	if err != nil {
+		rm.logger.Error("Error", "lang", event.Language)
+		return err
 	}
 
-	rm.Events <- result
+	question, err := rm.queries.GetQuestion(ctx, store.GetQuestionParams{
+		ID:         event.QuestionId,
+		LanguageID: lang.ID,
+	})
+	if err != nil {
+		rm.logger.Error("Error", "question", err)
+		return err
+	}
+
+	testCases, err := rm.queries.ListTestCasesForQuestion(ctx, event.QuestionId)
+	if err != nil {
+		return err
+	}
+
+	finalCode := combineCodeWithTemplate(question.TemplateFunction.String, event.Code, getLanguagePlaceHolder(normalizedLang))
+	rm.logger.Info("Code and Templated combined!", "final_code", finalCode)
+
+	// TODO: Execute Job with input (test cases)
+	// i for test cases number
+	for i, tc := range testCases {
+		rm.logger.Info("Testing...", "test_case", tc)
+		result := rm.worker.ExecuteJob(lang, finalCode, &tc.Input)
+		if result.Error != nil {
+			rm.Events <- events.SolutionResult{
+				SolutionSubmitted: event,
+				Status:            events.RuntimeError,
+				Message:           result.Output,
+			}
+
+			// This error is the user solution's fault, so we don't return it
+			return nil
+		}
+
+		// TODO: Compare output
+		if result.Output != tc.ExpectedOutput {
+			message := fmt.Sprintf("Input:%v, Expected Output:%v, Actual Output: %v", tc.Input, tc.ExpectedOutput, result.Output)
+			rm.logger.Warn("Output not match", "message", message)
+			rm.Events <- events.SolutionResult{
+				SolutionSubmitted: event,
+				Status:            events.WrongAnswer,
+				Message:           message,
+			}
+
+			// This error is the user solution's fault, so we don't return it
+			return nil
+		}
+		rm.logger.Info("placeholder:%v", "i", i)
+	}
+
+	// rm.Events <- result
 
 	return nil
+}
+
+// combineCodeWithTemplate combined the userCode and templateFunction at placeHolder
+func combineCodeWithTemplate(templateCode, userCode, placeHolder string) string {
+	finalCode := strings.Replace(templateCode, placeHolder, userCode, 1)
+	return finalCode
 }
 
 func (rm *RoomManager) processSolutionResult(e events.SolutionResult) error {
@@ -222,12 +285,12 @@ func (rm *RoomManager) processSolutionResult(e events.SolutionResult) error {
 
 	rm.logger.Info("processSoltuionResult() hit", "event", e)
 
-	// compiled failed
-	if !e.Result.Sucess {
+	//
+	if e.Status != events.Accepted {
 		rm.logger.Info("solution failed", "event", e)
 		sseEvent := events.SseEvent{
 			EventType: events.WRONG_SOLUTION_SUBMITTED,
-			Data:      fmt.Sprintf("log:%v", e.Result.Output),
+			Data:      fmt.Sprintf("status:%v,message:%v", e.Status, e.Message),
 		}
 
 		// send compilation error to the player
@@ -404,10 +467,28 @@ func (rm *RoomManager) processRoomDeleted(event events.RoomDeleted) error {
 	if err != nil {
 		rm.logger.Error("failed to delete room from database", "error", err)
 	}
-
 	rm.logger.Info("room deleted", "roomID", event.RoomId)
 
 	go rm.dispatchEvent(sseEvent)
 
 	return nil
+}
+
+var goPlaceHolder string = "// USER_CODE_HERE"
+var pythonPlaceHolder string = "# USER_CODE_HERE"
+var jsPlaceHolder string = "// USER_CODE_HERE"
+
+func getLanguagePlaceHolder(normalizedLanguage string) string {
+	var result string
+	switch normalizedLanguage {
+	case "Golang":
+		result = goPlaceHolder
+	case "Python":
+		result = pythonPlaceHolder
+	case "Javascript":
+		result = jsPlaceHolder
+
+	}
+
+	return result
 }

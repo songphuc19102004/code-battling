@@ -88,7 +88,6 @@ CREATE TABLE public.submissions (
 CREATE TABLE public.test_cases (
   id integer NOT NULL DEFAULT nextval('test_cases_id_seq'::regclass),
   question_id integer NOT NULL,
-  question_language_id integer NOT NULL,
   input text NOT NULL,
   expected_output text NOT NULL,
   time_constraint double precision,
