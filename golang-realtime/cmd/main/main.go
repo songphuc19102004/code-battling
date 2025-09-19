@@ -63,9 +63,9 @@ func main() {
 
 	worker, err := executor.NewWorkerPool(logger, queries, &executor.WorkerPoolOptions{
 		MaxWorkers:       5,
-		MemoryLimitBytes: 6,
+		MemoryLimitBytes: 256,
 		MaxJobCount:      3,
-		CpuNanoLimit:     1000,
+		CpuNanoLimit:     5000,
 	})
 	if err != nil {
 		panic(err)

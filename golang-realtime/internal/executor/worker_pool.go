@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	QueryTimeOutSecond   = 10 * time.Second
+	QueryTimeOutSecond   = 30 * time.Second
 	CodeRunTimeOutSecond = 10 * time.Second
 )
 

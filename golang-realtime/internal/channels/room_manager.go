@@ -253,7 +253,9 @@ func (rm *RoomManager) processSolutionSubmitted(event events.SolutionSubmitted) 
 		}
 
 		// TODO: Compare output
-		if result.Output != tc.ExpectedOutput {
+		actualOutput := strings.TrimSpace(result.Output)
+		expectedOutput := strings.TrimSpace(tc.ExpectedOutput)
+		if actualOutput != expectedOutput {
 			message := fmt.Sprintf("Input:%v, Expected Output:%v, Actual Output: %v", tc.Input, tc.ExpectedOutput, result.Output)
 			rm.logger.Warn("Output not match", "message", message)
 			rm.Events <- events.SolutionResult{
@@ -268,7 +270,11 @@ func (rm *RoomManager) processSolutionSubmitted(event events.SolutionSubmitted) 
 		rm.logger.Info("placeholder:%v", "i", i)
 	}
 
-	// rm.Events <- result
+	rm.Events <- events.SolutionResult{
+		SolutionSubmitted: event,
+		Status:            events.Accepted,
+		Message:           "Solution accepted",
+	}
 
 	return nil
 }
